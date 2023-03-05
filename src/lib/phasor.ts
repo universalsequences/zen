@@ -1,10 +1,12 @@
 import {AccumParams, accum} from './accum';
-import {UGen, Arg, Generated, float, Context} from './zen'
+import {UGen, Arg, Generated, float} from './zen'
+import {memo} from './memo';
 import {div, mult} from './math'
+import {Context} from './context';
 
 
 const defaults: AccumParams = {
-    min: -1,
+    min: 0,
     max: 1
 };
 
@@ -13,7 +15,7 @@ export const phasor = (
     reset: Arg = 0,
     params: AccumParams = defaults
 ): UGen => {
-    return (context: Context): Generated => {
+    return memo((context: Context): Generated => {
         let range = params.max - params.min;
         return accum(
             div(
@@ -21,5 +23,6 @@ export const phasor = (
                 context.sampleRate),
             reset,
             params)(context);
-    };
+    }
+               );
 };

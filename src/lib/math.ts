@@ -1,26 +1,27 @@
-import {emit, UGen, Arg, genArg, Context, Generated, emitCode, float} from './zen';
-import {emitHistory} from './history'
+import {UGen, Arg, genArg, Generated, float} from './zen';
+import {memo} from './memo';
+import {Context} from './context';
 
 const op = (operator: string, name: string) => {
     return (... ins: Arg[]): UGen =>{
-        return (context: Context): Generated => {
+        return memo((context: Context): Generated => {
             let varIdx = context.idx++;
             let _ins = ins.map(f => genArg(f, context));
             let opVar = `${name}Val${varIdx}`;
             let code = `let ${opVar} = ${_ins.map(x => x.variable).join(" " + operator + " ")};`
-            return emit(code, opVar, ..._ins);
-        }
+            return context.emit(code, opVar, ..._ins);
+        });
     };
 };
 
-const func = (func: string, name: string) => {
+export const func = (func: string, name: string) => {
     return (... ins: Arg[]): UGen =>{
         return (context: Context): Generated => {
             let varIdx = context.idx++;
             let _ins = ins.map(f => genArg(f, context));
             let opVar = `${name}Val${varIdx}`;
             let code = `let ${opVar} = ${func}(${_ins.map(x => x.variable).join(",")});`
-            return emit(code, opVar, ..._ins);
+            return context.emit(code, opVar, ..._ins);
         }
     };
 };
@@ -30,6 +31,9 @@ export const sub = op("-", "sub");
 export const mult = op("*", "mult");
 export const div  = op("/", "div");
 export const abs = func("Math.abs", "abs");
+export const floor = func("Math.floor", "floor");
+export const ceil = func("Math.ceil", "ceil");
+export const sin = func("Math.sin", "sin");
 
 export const mix = (a: Arg, b: Arg, amount: Arg): UGen => {
     return add(mult(a, amount),
@@ -50,6 +54,6 @@ var ${wrapName} = ${_input.variable};
 if( ${wrapName} < ${_min.variable}) ${wrapName} += ${diff};
 else if( ${wrapName} > ${_max.variable} ) ${wrapName} -= ${diff};
 `
-        return emit(code, wrapName, _input, _min, _max);
+        return context.emit(code, wrapName, _input, _min, _max);
     }
 };

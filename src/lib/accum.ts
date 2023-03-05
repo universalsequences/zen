@@ -1,4 +1,5 @@
-import {UGen, Arg, genArg, emitCode, Generated, Context, } from './zen';
+import {UGen, Arg, genArg,  Generated, } from './zen';
+import {Context} from './context';
 import {Block} from './memory-helper';
 
 export interface AccumParams {
@@ -12,16 +13,15 @@ export const accum = (incr: Arg, reset: Arg=0, params: AccumParams) => {
         let varName = `accum${varIdx}`;
         let _incr = genArg(incr, context);
         let _reset = genArg(reset, context);
-
+        let resetCheck = typeof reset === "number" && reset === 0 ?
+            "" :`if (${_reset.variable} > 0) ${varName} = ${params.min};`
+        
         let code = `
 let ${varName} = memory[${block.idx}];
-if (${_reset.variable} > 0) ${varName} = ${params.min};
+${resetCheck}
 memory[${block.idx}] = ${varName} + ${_incr.variable};
 if (memory[${block.idx}] > ${params.max}) memory[${block.idx}] -= ${params.max- params.min};
 `;
-        return {
-            code: emitCode(code, _incr, _reset),
-            variable: varName
-        }
+        return context.emit(code, varName, _incr, _reset);
     };
 };

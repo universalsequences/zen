@@ -5,10 +5,17 @@ import { Inter } from 'next/font/google'
 import styles from '@/styles/Home.module.css'
 import {history} from '@/lib/history'
 import {UGen, zen, float, input, ZenGraph} from '@/lib/zen'
-import {mult, wrap, add, sub, mix} from '@/lib/math'
+import {mult, ceil, wrap, add, sub, mix, div, floor} from '@/lib/math'
 import {phasor} from '@/lib/phasor'
+import {data, peek, poke} from '@/lib/data'
 import {createWorklet} from '@/lib/worklet'
-import {rampToTrig} from '@/lib/delta';
+import {zswitch} from '@/lib/switch';
+import {lt, rampToTrig} from '@/lib/delta';
+import {latch} from '@/lib/latch';
+import {scale} from '@/lib/scale';
+import {triangle} from '@/lib/triangle';
+import {noise} from '@/lib/noise';
+import {delay} from '@/lib/delay';
 
 const inter = Inter({ subsets: ['latin'] })
 
@@ -21,13 +28,22 @@ export default function Home() {
     }, []);
 
     const start = useCallback(() => {
-
-        const graph1: ZenGraph = zen(
-            wrap(phasor(90, phasor(8)), 0, wrap(phasor(1.2), 0, 0.2))
+        let voice = phasor(48.8);
+        const tri = triangle(
+            phasor(
+                latch(floor(add(80, mult(voice, 360))),
+                      rampToTrig(phasor(40))
+                     ),
+            ),
+            scale(phasor(.1), 0, 1, .01, .99)
         );
 
+        const graph1 = delay(tri, 20000);
+            
+            
+
         let ctxt = new AudioContext();
-        createWorklet(ctxt, graph1).then(
+        createWorklet(ctxt, zen(graph1)).then(
             x => {
                 setWorkletCode(x.code);
                 x.workletNode.connect(ctxt.destination);

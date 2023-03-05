@@ -1,4 +1,4 @@
-import {Context, ZenGraph} from './zen';
+import {ZenGraph} from './zen';
 
 export interface ZenWorklet {
     code: string;
@@ -9,7 +9,6 @@ export const createWorklet = (ctxt: AudioContext, graph: ZenGraph, name: string 
 
     return new Promise((resolve: (x: ZenWorklet) => void) => {
         let workletCode = createWorkletCode(name, graph);
-        console.log(workletCode);
         const url = window.URL.createObjectURL(
             new Blob(
                 [ workletCode ], 
@@ -33,7 +32,6 @@ export const createWorklet = (ctxt: AudioContext, graph: ZenGraph, name: string 
 };
 
 const createWorkletCode = (name: string, graph: ZenGraph): string => {
-    console.log("create worklet code called");
     return `
 class ${name}Processor extends AudioWorkletProcessor {
 
@@ -56,7 +54,7 @@ process(inputs, outputs) {
   for (let i=0; i < outputs.length; i++) {
     for (let j=0; j < outputs[i][0].length; j++) {
       ${genInputs(graph)}
-      ${graph.code.split("\n").map(x => "      " + x).join("\n")}
+      ${prettyPrint("      ", graph.code)}
       ${genOutputs(graph)}
     }
   }

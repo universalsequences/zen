@@ -1,5 +1,4 @@
-import {Memory, Block} from './memory-helper'
-import {emitHistory} from './history'
+import {Context} from './context';
 
 /**
  * Zen is a minimal implementation of a few simple gen~ (max/msp) 
@@ -9,44 +8,19 @@ import {emitHistory} from './history'
  * 
  */
 
-export interface Context {
-    memory: Memory;
-    idx: number;
-    histories: number;
-    numberOfInputs: number;
-    sampleRate: number;
-}
-
-class ZenContext {
-    memory: Memory;
-    idx: number;
-    histories: number;
-    numberOfInputs: number;
-    sampleRate: number;
-
-    constructor() {
-        this.memory = new Memory(4096),
-        this.idx = 0;
-        this.histories = 0;
-        this.numberOfInputs = 1;
-        this.sampleRate = 44100;
-    }
-
-    input(inputNumber: number): string {
-        if (inputNumber > this.numberOfInputs) {
-            this.numberOfInputs = inputNumber;
-        }
-        return 'in' + inputNumber;
-    }
-}
-
 export interface Generated {
-    code: string; // the code generated
-    variable?: string; // the variable name referenced 
+    code: string; /*  the code generated */
+    variable?: string; /* the variable name referenced */
     history?: History;
 };
 
 export type UGen = (context: Context) => Generated;
+
+export type ZenGraph = Generated & {
+    context: Context;
+}
+
+export type Arg = UGen | number;
 
 export const float= (x: number): UGen => {
     return () => {
@@ -58,7 +32,7 @@ export const float= (x: number): UGen => {
 };
 
 export const input= (inputNumber: number = 0): UGen => {
-    return (context: ZenContext) => {
+    return (context: Context) => {
         let name = context.input(inputNumber);
         return {
             code: name,
@@ -67,19 +41,24 @@ export const input= (inputNumber: number = 0): UGen => {
     };
 };
 
-export type ZenGraph = Generated & {
-    context: Context;
-}
 
-export const zen = (input: UGen): ZenGraph => {
-    let context: Context = new ZenContext()
+export const zen = (...inputs: UGen[]): ZenGraph => {
+    let context: Context = new Context();
+    let code = "";
+    let lastVariable = "";
+    let i=0;
+    for (let input of inputs) {
+        let _out = input(context);
+        code += ' ' + _out.code;
+        lastVariable = _out.variable;
+        i++;
+    }
     return {
-        ...input(context),
-        context
+        code,
+        context,
+        variable: lastVariable
     };
 }
-
-export type Arg = UGen | number;
 
 export const genArg = (input: Arg, context: Context): Generated  => {
     if (typeof input === "number") {
@@ -87,29 +66,5 @@ export const genArg = (input: Arg, context: Context): Generated  => {
     }
     return input(context);
 };
-
-export const emit = (code: string, variable: string, ... args : Generated[]): Generated => {
-    return {
-        code: emitCode(code, ... args),
-        variable,
-        history: emitHistory(...args),
-    };
-};
-
-export const emitCode = (code: string, ... gens: Generated[]): string => {
-    let vout = "";
-    for (let gen of gens) {
-        if (containsVariable(gen)) {
-            vout += gen.code;
-        }
-    }
-    return vout + '\n' + code;
-}
-
-// a variable is variable referencing the code. so if they are
-// the same, then this is not a variable
-const containsVariable = (gen: Generated): boolean => {
-    return gen.code !== gen.variable;
-}
 
 

@@ -1,5 +1,6 @@
 import {Block} from './memory-helper'
-import {UGen, Generated, Context, emitCode} from './zen';
+import {UGen, Generated} from './zen';
+import {Context, emitCode} from './context';
 
 /**
    in order for the entire thing to work we need a Context
@@ -60,7 +61,7 @@ memory[${block.idx}] = ${_input.variable};
         }
         
         return {
-            code: _input ? emitCode(code, _input) : code,
+            code: _input ? emitCode(context, code, _input) : code,
             variable: historyVar,
             history: historyName ?  {
                 name: historyName,
