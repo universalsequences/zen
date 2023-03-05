@@ -1,38 +1,52 @@
-This is a [Next.js](https://nextjs.org/) project bootstrapped with [`create-next-app`](https://github.com/vercel/next.js/tree/canary/packages/create-next-app).
+This repository is an exploration is implementing Gen~ (Max/Msp's sound generation language) in typescript.
 
-## Getting Started
+This is heavily inspired by Charlie Robert's genish.js repo: https://github.com/charlieroberts/genish.js , however
+attempts to extend it in 3 ways:
+1. Allow several independent audio graphs to be created, so it can be integrated in web-based DAWs, where having multiple standalone effects
+is crucial-- genish.js only allows one monolithic audio graph
+2. Written in typescript, utilizing functional currying to handle the "context"
+3. Written small enough to include on-chain (tbf genish.js is very small)
 
-First, run the development server:
+The ultimate goal is for this package to be placed onchain, and then used by other onchain art projects.
 
-```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-```
+# What is Gen~?
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Gen~ is Max MSPs sound generation language, that approachs sound synthesis/effects sample by sample.
 
-You can start editing the page by modifying `pages/index.tsx`. The page auto-updates as you edit the file.
+Computers normally process audio in chunks of "samples" (i.e. numbers from -1 to 1). This is efficient for the computer, but hard 
+to reason about. For example, if you were to think of an effect that depends on a sample 500 samples in the past, you'd normally
+have to figure out which chunk that sample was in, etc.
 
-[API routes](https://nextjs.org/docs/api-routes/introduction) can be accessed on [http://localhost:3000/api/hello](http://localhost:3000/api/hello). This endpoint can be edited in `pages/api/hello.ts`.
+When you abstract away chunks, and think of audio as simply streams of numbers, much more creative possibilities arise.
 
-The `pages/api` directory is mapped to `/api/*`. Files in this directory are treated as [API routes](https://nextjs.org/docs/api-routes/introduction) instead of React pages.
+That is the power of Gen~, abstracting away all that chunk nonsense to give you the stream of sound.
 
-This project uses [`next/font`](https://nextjs.org/docs/basic-features/font-optimization) to automatically optimize and load Inter, a custom Google Font.
+# Why do we need this onchain?
 
-## Learn More
+Onchain generative music is limited by web-audio. Simple concepts like oscillator hardsync & feedback FM are not implemented, even though they've been around since the 80s. 
 
-To learn more about Next.js, take a look at the following resources:
+In **Zen** you can get a hardsynced synth like this
+`
+phasor(440, phasor(22)) 
+`
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+A simple onepole lowpass filter: `history(mix(input(0), history(undefined, "filter"), 0.999), "filter")`
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js/) - your feedback and contributions are welcome!
+# How it works?
 
-## Deploy on Vercel
+**Web-Audio** allows you to make custom AudioWorklets, which are basically custom ways to process audio-- beyond the core Web-Audio API.
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+AudioWorklets are just javascript code, and thus they can be generated. **Zen** generates efficient AudioWorklets from simple expressions.
+The generated AudioWorklet is automatically loaded and you are returned an **AudioNode** (the terminology for a Web-Audio building block). Allowing
+you to connect it with the rest of your Web-Audio setup.
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/deployment) for more details.
+## History/Single-Sample Feedback
+
+
+# todo
+
+This is just getting started, and implemented as a nextjs project, however, I plan on turning this into a standolone package that can be easily implrted
+
+
+
+
