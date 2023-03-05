@@ -21,7 +21,7 @@ When you abstract away chunks, and think of audio as simply streams of numbers, 
 
 That is the power of Gen~, abstracting away all that chunk nonsense to give you the stream of sound.
 
-# Why do we need this in the onchain?
+# Why do we need this onchain?
 
 Onchain generative music is limited by web-audio. Simple concepts like oscillator hardsync & feedback FM are not implemented, even though they've been around since the 80s. 
 
