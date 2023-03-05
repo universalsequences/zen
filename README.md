@@ -25,12 +25,23 @@ That is the power of Gen~, abstracting away all that chunk nonsense to give you 
 
 Onchain generative music is limited by web-audio. Simple concepts like oscillator hardsync & feedback FM are not implemented, even though they've been around since the 80s. 
 
-In zen you can get a hardsynced synth like this
+In **Zen** you can get a hardsynced synth like this
 `
 phasor(440, phasor(22)) 
 `
 
 A simple onepole lowpass filter: `history(mix(input(0), history(undefined, "filter"), 0.999), "filter")`
+
+# How it works?
+
+**Web-Audio** allows you to make custom AudioWorklets, which are basically custom ways to process audio-- beyond the core Web-Audio API.
+
+AudioWorklets are just javascript code, and thus they can be generated. **Zen** generates efficient AudioWorklets from simple expressions.
+The generated AudioWorklet is automatically loaded and you are returned an **AudioNode** (the terminology for a Web-Audio building block). Allowing
+you to connect it with the rest of your Web-Audio setup.
+
+## History/Single-Sample Feedback
+
 
 # todo
 
