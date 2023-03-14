@@ -4,19 +4,18 @@ import {Block} from './memory-helper';
 
 export const latch = (value: Arg, hold: Arg=0) => {
     return (context: Context) => {
-        let block: Block =  context.memory.alloc(1);
-        let varIdx = context.idx++;
-        let varName = `latch${varIdx}`;
-        let _value = genArg(value, context);
-        let _hold = genArg(hold, context);
+        let block: Block =  context.alloc(1);
+        let [latchVal] = context.useVariables("latchVal"); 
+        let _value = context.gen(value);
+        let _hold = context.gen(hold);
 
         let code = `
-let ${varName} = memory[${block.idx}];
+let ${latchVal} = memory[${block.idx}];
 if (${_hold.variable} > 0) {
   memory[${block.idx}] = ${_value.variable};
-  ${varName} = memory[${block.idx}];
+  ${latchVal} = memory[${block.idx}];
 }
 `;
-        return context.emit(code, varName, _value, _hold);
+        return context.emit(code, latchVal, _value, _hold);
     };
 };

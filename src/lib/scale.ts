@@ -1,4 +1,5 @@
-import {Arg, genArg, emit, UGen, Generated, Context} from './zen';
+import {Arg, genArg, UGen, Generated} from './zen';
+import {Context} from './context';
 import {add, sub, div, mult} from './math';
 
 export const scale = (value: Arg, min1: Arg, max1: Arg, min2: Arg, max2: Arg): UGen => {
@@ -12,9 +13,9 @@ export const scale = (value: Arg, min1: Arg, max1: Arg, min2: Arg, max2: Arg): U
         let scaleName = `scaleVal${varIdx}`;
         let range1Name = `range1${varIdx}`;
         let range2Name = `range2${varIdx}`;
-       let range1 = typeof min1 === "number" && typeof max1 === "number" ?
+        let range1 = typeof min1 === "number" && typeof max1 === "number" ?
            max1 - min1 : `${_max1.variable} - ${_min1.variable}`;
-       let range2 = typeof min2 === "number" && typeof max2 === "number" ?
+        let range2 = typeof min2 === "number" && typeof max2 === "number" ?
            max2 - min2 : `${_max2.variable} - ${_min2.variable}`;
 
         let code = `

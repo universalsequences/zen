@@ -6,6 +6,13 @@ export const memo = (fn: UGen): UGen => {
 
     return (context: Context): Generated => {
         if (memoized !== undefined) {
+            if (context.isVariableEmitted(memoized.variable!)) {
+                return {
+                    ... memoized,
+                    code: memoized.variable!
+                };
+
+            }
             return memoized;
         }
         memoized = fn(context);

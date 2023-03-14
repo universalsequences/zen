@@ -11,13 +11,14 @@ import {Context} from './context';
 export interface Generated {
     code: string; /*  the code generated */
     variable?: string; /* the variable name referenced */
-    history?: History;
+    histories: string[];
 };
 
 export type UGen = (context: Context) => Generated;
 
 export type ZenGraph = Generated & {
     context: Context;
+    histories: string [];
 }
 
 export type Arg = UGen | number;
@@ -26,7 +27,8 @@ export const float= (x: number): UGen => {
     return () => {
         return {
             code: x.toString(),
-            variable: x.toString()
+            variable: x.toString(),
+            histories: []
         };
     };
 };
@@ -36,7 +38,8 @@ export const input= (inputNumber: number = 0): UGen => {
         let name = context.input(inputNumber);
         return {
             code: name,
-            variable: name
+            variable: name,
+            histories: []
         };
     };
 };
@@ -47,16 +50,24 @@ export const zen = (...inputs: UGen[]): ZenGraph => {
     let code = "";
     let lastVariable = "";
     let i=0;
+    let histories: string [] = [];
     for (let input of inputs) {
         let _out = input(context);
         code += ' ' + _out.code;
-        lastVariable = _out.variable;
+        lastVariable = _out.variable!;
         i++;
+        if (_out.histories) {
+            histories = [
+                ... histories,
+                ... _out.histories
+            ];
+        }
     }
     return {
         code,
         context,
-        variable: lastVariable
+        variable: lastVariable,
+        histories
     };
 }
 

@@ -1,72 +1,161 @@
 import Head from 'next/head'
-import Image from 'next/image'
-import {useState, useEffect, useCallback} from 'react'
+import { ParamGen, param } from '@/lib/param';
+import { useState, useEffect, useCallback, useRef } from 'react'
 import { Inter } from 'next/font/google'
-import styles from '@/styles/Home.module.css'
-import {history} from '@/lib/history'
-import {UGen, zen, float, input, ZenGraph} from '@/lib/zen'
-import {mult, ceil, wrap, add, sub, mix, div, floor} from '@/lib/math'
-import {phasor} from '@/lib/phasor'
-import {data, peek, poke} from '@/lib/data'
-import {createWorklet} from '@/lib/worklet'
-import {zswitch} from '@/lib/switch';
-import {lt, rampToTrig} from '@/lib/delta';
-import {latch} from '@/lib/latch';
-import {scale} from '@/lib/scale';
-import {triangle} from '@/lib/triangle';
-import {noise} from '@/lib/noise';
-import {delay} from '@/lib/delay';
+import { useInterval } from './useInterval'
+import { zen } from '@/lib/zen'
+import { mult, min, max, ceil, wrap, add, sub, mix, div, floor } from '@/lib/math'
+import { phasor } from '@/lib/phasor'
+import { rampToTrig } from '@/lib/delta'
+import { createWorklet } from '@/lib/worklet'
+import { triangle } from '@/lib/triangle';
+import { TrigGen, decay, decayTrig, t60 } from '@/lib/t60'
+import { history, History } from '@/lib/history'
+import { noise } from '@/lib/noise'
+import { membrane, Material } from '@/lib/physical-modeling/spider-web'
+import { Component } from '@/lib/physical-modeling/Component'
+import { createSpiderWeb, SpiderWeb } from '@/lib/physical-modeling/web-maker'
 
+import { sine } from '@/lib/unit'
+import { scale } from '@/lib/scale'
+import { delay } from '@/lib/delay'
+import { data, peek } from '@/lib/data'
+import { sumLoop } from '@/lib/loop'
+import { s } from '@/lib/seq'
 const inter = Inter({ subsets: ['latin'] })
+import Web from './web'
 
 export default function Home() {
 
     const [workletCode, setWorkletCode] = useState<string>("");
+    const [web, setWeb] = useState<SpiderWeb>();
+    const pitchParam = useRef<ParamGen>();
+    const pitchParam2 = useRef<ParamGen>();
+    const releaseParam = useRef<ParamGen>();
+    const rateParam = useRef<ParamGen>();
+    const hitParam = useRef<ParamGen>();
+    const [displacements, setDisplacements] = useState<Float32Array>(new Float32Array(1));
+    const getter = useRef();
+    const trigger = useRef<History | undefined>();
 
     useEffect(() => {
         window.addEventListener("mousedown", start);
+        return () => window.removeEventListener("mousedown", start);
     }, []);
 
     const start = useCallback(() => {
-        let voice = phasor(48.8);
-        const tri = triangle(
-            phasor(
-                latch(floor(add(80, mult(voice, 360))),
-                      rampToTrig(phasor(40))
-                     ),
-            ),
-            scale(phasor(.1), 0, 1, .01, .99)
-        );
+        let trig = decay(20);
 
-        const graph1 = delay(tri, 20000);
-            
-            
+        let web: SpiderWeb = createSpiderWeb(3, 4);
+
+        setWeb(web);
+
+        const rate = param(1.15);
+        rateParam.current = rate;
+
+        const hit = param(0);
+        const release = param(0.900993);
+        const pitch = param(0.195914141);
+        pitchParam.current = pitch;
+        releaseParam.current = release;
+        hitParam.current = hit;
+
+        let input = mult(1, decayTrig(rampToTrig(phasor(rate)), 100));
+        let material = {
+            pitch,
+            release: 0.95,
+            placement: 10,
+            noise: .5
+        };
+
+        let component = new Component(
+            material,
+            web);
+
+        let pitch2 = param(0.4);
+        let material2 = {
+            pitch: div(pitch, 2),
+            release: 0.95,
+            placement: 0,
+            noise: .9
+        };
+
+        pitchParam2.current = pitch2;
+
+        let web2: SpiderWeb = createSpiderWeb(2, 4);
+        let component2 = new Component(
+            material2,
+            web2);
+
+        let st = component2.generateStructure(component);
+
+        component2.connect(component, st);
+
+
+        let gen2 = component2.gen(add(0));
+
+        let graph1 = add(
+            mult(2, component.gen(input)),
+            mult(8, gen2));
 
         let ctxt = new AudioContext();
-        createWorklet(ctxt, zen(graph1)).then(
+        createWorklet(ctxt, zen(mult(1, graph1))).then(
             x => {
                 setWorkletCode(x.code);
-                x.workletNode.connect(ctxt.destination);
+                let gain = ctxt.createGain();
+                gain.gain.value = 9;
+                getter.current = component2.u;
+                let compressor = ctxt.createDynamicsCompressor();
+                let filter = ctxt.createBiquadFilter();
+                filter.type = "highpass";
+
+                filter.frequency.value = 160;
+                x.workletNode.connect(gain);
+                gain.connect(filter)
+                filter.connect(compressor);
+                compressor.connect(ctxt.destination);
             });
+    }, [trigger]);
+
+    const onTick = useCallback(() => {
+        if (getter.current) {
+            getter.current!.get!().then((x) => {
+                console.log(x);
+                setDisplacements(x);
+            });
+        }
+    }, [setDisplacements]);
+
+    const onMouseMove = useCallback((e: MouseEvent) => {
+        if (!pitchParam.current) {
+            return;
+        }
+        pitchParam.current!.set(e.pageY / window.innerHeight);
+        pitchParam2.current!.set(e.pageX / window.innerWidth);
+        //releaseParam.current!.set(e.pageX / window.innerWidth);
+        //rateParam.current!.set(22 * e.pageY / window.innerHeight);
+        hitParam.current!.set(35 * e.pageX / window.innerWidth);
     }, []);
 
+    useInterval(onTick, 20);
+
+    //console.log(displacements)
     return (
         <>
-          <Head>
-            <title>Create Next App</title>
-            <meta name="description" content="Generated by create next app" />
-            <meta name="viewport" content="width=device-width, initial-scale=1" />
-            <link rel="icon" href="/favicon.ico" />
-          </Head>
-          <main className="flex flex-col text-xs w-full h-full">
-            <div className="rounded-lg  mt-8 m-auto p-5 bg-white text-black">
-              <pre>
-                <code>
-                  {workletCode}
-                </code>
-              </pre>
-            </div>
-          </main>
+            <Head>
+                <title>Create Next App</title>
+                <meta name="description" content="Generated by create next app" />
+                <meta name="viewport" content="width=device-width, initial-scale=1" />
+                <link rel="icon" href="/favicon.ico" />
+            </Head>
+            <main
+                onMouseMove={onMouseMove}
+                className="flex flex-col text-xs w-full h-full">
+                <div
+                    className="rounded-lg  mt-8 m-auto p-5 bg-white text-black">
+                    {web && <Web web={web} displacements={displacements} />}
+                </div>
+            </main>
         </>
     );
 }

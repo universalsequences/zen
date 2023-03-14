@@ -1,6 +1,6 @@
-import {UGen, Generated, Arg, Context} from './zen';
+import {UGen, Generated, Arg} from './zen';
 import {scale} from './scale';
-import {lt} from './delta';
+import {lt} from './compare';
 import {zswitch} from './switch';
 
 export const triangle = (ramp: UGen, duty: Arg = 0.5): UGen => {

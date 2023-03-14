@@ -4,21 +4,20 @@ import {Context} from './context';
 import {accum} from './accum';
 import {lerpPeek} from './lerp'
 
-const MAX_SIZE = 44100; // 1 sec max
+const MAX_SIZE = 44100; // 4 sec max
 
 export const delay = (input: UGen, delayTime: Arg): UGen => {
     let buf = data(MAX_SIZE, 1);
 
     return (context: Context): Generated => {
         let buffer = buf(context);
+        console.log("delay buffer=", buffer, context)
         let _input = input(context);
-        let _delayTime = genArg(delayTime, context);
-        let varIdx = context.idx++;
-        let delayName = `delayVal${varIdx}`;
-        let indexName = `index${varIdx}`;
-        let delayIndexName = `delayIndex${varIdx}`;
+        let _delayTime = context.gen(delayTime);
+        let [delayName, indexName, delayIndexName] = context.useVariables(
+          "delayVal", "index", "delayIndex");
 
-        let _accum = accum(1, 0, {min: 0, max: MAX_SIZE-1})(context);
+        let _accum = accum(1, 0, {min: 0, max: MAX_SIZE, exclusive: true})(context);
         let index = `${buffer.idx} + (${_accum.variable})`
         let lerped = lerpPeek(context, buffer, delayIndexName);
         let out = `
@@ -32,7 +31,6 @@ if (${delayIndexName} < ${buffer.idx}) {
 ${lerped.code}
 let ${delayName} = ${lerped.variable};
 `;
-
 
         return context.emit(out, delayName, _input, _delayTime);
     };

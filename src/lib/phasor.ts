@@ -4,7 +4,6 @@ import {memo} from './memo';
 import {div, mult} from './math'
 import {Context} from './context';
 
-
 const defaults: AccumParams = {
     min: 0,
     max: 1
@@ -23,6 +22,5 @@ export const phasor = (
                 context.sampleRate),
             reset,
             params)(context);
-    }
-               );
+    });
 };

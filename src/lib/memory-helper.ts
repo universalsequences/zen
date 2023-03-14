@@ -1,43 +1,50 @@
-export interface Block {
-    idx: number;
-    size: number;
-}
+import { Context } from './context';
+import { MemoryBlock } from './block'
 
-type BlockList = Block[];
+type BlockList = MemoryBlock[];
 
 export class Memory {
-    heap: Float32Array;
     size: number;
     freeList: BlockList;
     references: number;
+    blocksInUse: MemoryBlock[];
+    context: Context;
 
-    constructor(size: number) {
-        this.heap = new Float32Array(size);
+    constructor(context: Context, size: number) {
         this.size = size;
+        this.context = context;
         this.references = 0;
+        this.blocksInUse = [];
 
         // start with a free list of size of the entire heap
         this.freeList = [
-            {
-                idx: 0,
-                size
-            }
+            new MemoryBlock(context, 0, size, 0)
         ];
     };
 
-    alloc(size: number): Block {
+    alloc(size: number): MemoryBlock {
         let idx = 0;
-        for (let i=0; i < this.freeList.length; i++) {
-            let block: Block = this.freeList[i];
+        for (let i = 0; i < this.freeList.length; i++) {
+            let block: MemoryBlock = this.freeList[i];
             if (size <= block.size) {
-                return this.useBlock(block, size, i);
+                block = this.useBlock(block, size, i);
+                block.allocatedSize = size;
+                this.blocksInUse.push(block);
+                return block;
             }
         }
-        //
-        return {idx: -1, size};
+
+        this.increaseHeapSize();
+        return this.alloc(size);
     }
 
-    useBlock(block: Block, size: number, freeIdx: number): Block {
+    increaseHeapSize() {
+        this.size *= 2;
+        let lastBlock = this.freeList[this.freeList.length - 1];
+        lastBlock.size = this.size - lastBlock.allocatedSize;
+    }
+
+    useBlock(block: MemoryBlock, size: number, freeIdx: number): MemoryBlock {
         if (block.size == size) {
             // we have a perfect match so remove entirely from
             // free list
@@ -45,16 +52,20 @@ export class Memory {
         } else {
             // we have an unperfect match, so create a new block with
             // the size subtracted out and the idx shifted over
-            this.freeList.splice(freeIdx, 1, {
-                size: block.size - size,
-                idx: block.idx + size
-            });
+            this.freeList.splice(
+                freeIdx,
+                1,
+                new MemoryBlock(
+                    this.context,
+                    (block.idx as number) + size,
+                    block.size - size,
+                    size));
         }
         this.references++;
         return block;
     }
 
-    free(block: Block) {
+    free(block: MemoryBlock) {
         this.freeList.push(block);
         this.references--;
         if (this.references === 0) {
