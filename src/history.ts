@@ -1,5 +1,4 @@
 import { MemoryBlock } from './block';
-import { uuid } from 'uuidv4';
 import { UGen, Generated, Arg, float } from './zen';
 import { Context, emitCode, ContextMessageType } from './context';
 
@@ -31,7 +30,6 @@ export type ContextualBlock = {
 };
 
 export const history = (val?: number, params?: HistoryParams, debugName?: string): History => {
-    let id: string = uuid();
     let block: MemoryBlock;
     let historyVar: string;
     let context: Context;
