@@ -1,4 +1,5 @@
 import { Context } from './context';
+import { memo } from './memo';
 import { ContextualBlock } from './history';
 import { MemoryBlock } from './block';
 import { UGen, Generated } from './zen';
@@ -13,12 +14,14 @@ export const click = (): Clicker => {
     let clickVar: string;
     let contextBlocks: ContextualBlock[] = [];
 
-    let clicker: Clicker = (context: Context): Generated => {
+    let clicker: Clicker = memo((context: Context): Generated => {
         let contextChanged = context !== _context;
         _context = context;
         if (block === undefined || contextChanged) {
             block = context.alloc(1);
             clickVar = context.useVariables("clickVal")[0];
+            contextBlocks = contextBlocks.filter(
+                x => !x.context.disposed);
             contextBlocks.push({ block, context });
         }
 
@@ -26,13 +29,13 @@ export const click = (): Clicker => {
         // immediately set it back to 0
         // aka: generate a 1 for exactly one SAMPLE!
         let code = `
-let ${clickVar} = memory[${block.idx}];
+${context.varKeyword} ${clickVar} = memory[${block.idx}];
 if (${clickVar} > 0) {
    memory[${block.idx}] = 0;
 }
 `;
         return context.emit(code, clickVar);
-    };
+    });
 
     clicker.click = (time?: number) => {
         if (!_context) {

@@ -40,10 +40,14 @@ export const sumLoop = (range: Range, body: LoopBody): UGen => {
 
         let _body = body(_variable)(loopContext);
         let histories = Array.from(new Set(_body.histories));
+        histories = histories.map(x => x.replaceAll("let", context.varKeyword) + ';');
+        let outerHistories = Array.from(new Set(_body.outerHistories));
+        outerHistories = outerHistories.map(x => x.replaceAll("let", context.varKeyword) + ';');
         let out = `
-let ${sum} = 0;
-for (let ${i}=${_min.variable}; ${i} < ${_max.variable}; ${i}++ ) {
-${histories.join("\n")}
+${prettyPrint("    ", outerHistories.join(""))}
+${context.varKeyword} ${sum} = 0;
+for (${context.intKeyword} ${i}=${_min.variable}; ${i} < ${_max.variable}; ${i}++ ) {
+${prettyPrint("    ", histories.join("\n"))}
 ${prettyPrint("    ", _body.code)}
     ${sum} += ${_body.variable};
 }
@@ -65,18 +69,22 @@ export const rawSumLoop = (range: Range, body: UGen, i: string): UGen => {
         //let _variable = variable(i);
 
         let _body = body(loopContext);
-        console.log('after calling the body loopContext.idx=', loopContext.idx);
         let histories = Array.from(new Set(_body.histories));
+        histories = histories.map(x => x.replaceAll("let", context.varKeyword) + ';');
+        let outerHistories = Array.from(new Set(_body.outerHistories));
+        outerHistories = outerHistories.map(x => x.replaceAll("let", context.varKeyword) + ';');
         let out = `
-let ${sum} = 0;
-for (let ${i}=${_min.variable}; ${i} < ${_max.variable}; ${i}++ ) {
-${histories.join("\n")}
+${prettyPrint("    ", outerHistories.join(""))}
+${context.varKeyword} ${sum} = 0;
+for (${context.intKeyword} ${i}=${_min.variable}; ${i} < ${_max.variable}; ${i}++ ) {
+${prettyPrint("    ", histories.join(""))}
 ${prettyPrint("    ", _body.code)}
     ${sum} += ${_body.variable};
 }
 `;
 
-        return context.emit(out, sum);
+        let g: Generated = context.emit(out, sum);
+        return g;
     }
 }
 
@@ -84,7 +92,10 @@ ${prettyPrint("    ", _body.code)}
 export const variable = (value: string): UGen => {
     return (context: Context): Generated => {
         let [_var] = context.useVariables("loopIdx");
-        let out = `let ${_var} = ${value}`;
-        return context.emit(out, _var);
+        let intKeyword = (context as LoopContext).context ? (context as LoopContext).context.intKeyword : context.intKeyword;
+        let out = `${intKeyword} ${_var} = ${value};`;
+        let generated: Generated = context.emit(out, _var);
+        generated.isLoopDependent = true;
+        return generated;
     }
 }

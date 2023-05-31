@@ -1,4 +1,5 @@
 import { Context } from './context';
+import { Target } from './targets';
 import { History } from './history';
 
 /**
@@ -13,9 +14,13 @@ export interface Generated {
     code: string; /*  the code generated */
     variable?: string; /* the variable name referenced */
     histories: string[];
+    outerHistories?: string[];
     outputs?: number;
     inputs?: number;
     params: History[];
+    context?: Context;
+    isLoopDependent?: boolean;
+    outerLoops?: string[];
 };
 
 export type UGen = (context: Context) => Generated;
@@ -60,7 +65,7 @@ export const input = (inputNumber: number = 0): UGen => {
 
 // The way this works w/o outputs: each output will go in a different argument
 export const zen = (...inputs: UGen[]): ZenGraph => {
-    let context: Context = new Context();
+    let context: Context = new Context(Target.C);
     let code = "";
     let lastVariable = "";
     let numberOfOutputs = 1;

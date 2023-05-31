@@ -1,0 +1,15 @@
+import { mult, add, sub, div } from '../math';
+import { s, abs, mix, clamp, Arg, UGen, min, float, Context, Generated, history } from '../index';
+import { samplerate } from './zdf';
+
+
+/**
+ * Zero Delay Filter: Taken blindly from chatGPT
+ */
+export const onepole = (in1: Arg, cutoff: Arg): UGen => {
+    const hist = history();
+
+    const m = mix(in1, hist(), cutoff);
+    return hist(m);
+
+};

@@ -1,4 +1,6 @@
 import { Context } from './context';
+import { generateWASM } from './wasm';
+import { Target } from './targets';
 import { ZenGraph } from './zen';
 
 export interface ZenWorklet {
@@ -15,25 +17,13 @@ export const createWorklet = (
     onlyCompile: boolean = false): Promise<LazyZenWorklet> => {
 
     return new Promise(async (resolve: (x: LazyZenWorklet) => void) => {
-        let a = new Date().getTime();
-        let workletCode = createWorkletCode(name, graph);
-        console.log(workletCode);
-        let b = new Date().getTime();
+        let { code, wasm } = createWorkletCode(name, graph);
+        let workletCode = code;
 
-        const url = window.URL.createObjectURL(
-            new Blob(
-                [workletCode],
-                { type: 'text/javascript' }
-            )
-        );
-        let c = new Date().getTime();
-
-        let numChannels = graph.numberOfOutputs
+        const workletBase64 = btoa(workletCode);
+        const url = `data:application/javascript;base64,${workletBase64}`;
 
         const onCompilation = (): AudioWorkletNode => {
-            let d = new Date().getTime();
-            console.log("create object url took %s ms", c - b);
-            console.log("addWorkletNode took %s ms", d - c);
             const workletNode = new AudioWorkletNode(
                 ctxt,
                 name,
@@ -53,18 +43,32 @@ export const createWorklet = (
                     type,
                     body
                 });
-            }
-            for (let block of graph.context.memory.blocksInUse) {
-                if (block.initData !== undefined) {
-                    workletNode.port.postMessage({
-                        type: "init-memory",
-                        body: {
-                            idx: block._idx === undefined ? block.idx : block._idx,
-                            data: block.initData
-                        }
-                    })
+
+                if (graph.context.target === Target.C) {
+                    if (type === "wasm-ready") {
+                        initMemory(graph.context, workletNode);
+                    }
                 }
             }
+
+            // Send initial data (Param & Data operators) to the worklet
+            if (graph.context.target === Target.C) {
+                fetch('/compile', {
+                    method: "POST",
+                    headers: { 'Content-Type': 'text/plain' },
+                    body: wasm
+                }).then(
+                    async response => {
+                        let wasmBuffer = await response.arrayBuffer();
+                        workletNode.port.postMessage({ type: "load-wasm", body: wasmBuffer });
+                    });
+
+            } else {
+                initMemory(graph.context, workletNode);
+            }
+
+            // once complete send message saying "ready"
+            workletNode.port.postMessage({ type: "ready" });
 
             graph.context.addWorklet(workletNode);
             if (!onlyCompile) {
@@ -86,34 +90,99 @@ export const createWorklet = (
     });
 };
 
-const createWorkletCode = (name: string, graph: ZenGraph): string => {
-    return `
+const createWorkletCode = (name: string, graph: ZenGraph): CodeOutput => {
+    // first lets replace all instances of @message with what we want
+    let messageConstants: string[] = [];
+    let beginToken = "@beginMessage";
+    let endToken = "@endMessage";
+    let indexOf = graph.code.indexOf(beginToken);
+    let messageIdx = 1;
+    while (indexOf > -1) {
+        let end = graph.code.indexOf(endToken);
+        if (end === -1) {
+            break;
+        }
+        let messageKey = graph.code.slice(indexOf + beginToken.length, end);
+        messageConstants.push(messageKey);
+        graph.code = graph.code.slice(0, indexOf) + `this.messageKey${messageIdx++}` + graph.code.slice(end + endToken.length);
+        indexOf = graph.code.indexOf(beginToken);
+    }
+    let messageArray = "";
+    messageIdx = 1;
+    for (let message of messageConstants) {
+        messageArray += `this.messageKey${messageIdx++} = "${message}";` + "\n";
+    }
+
+    const { code, wasm } = genProcess(graph);
+    let out = `
 class ${name}Processor extends AudioWorkletProcessor {
+
+  async loadWASM(wasmBuffer) {
+    const wasmModule = await WebAssembly.compile(wasmBuffer);
+    const importObject = {
+    env: {
+      memory: new WebAssembly.Memory({ initial: 256, maximum: 256 })
+    },
+ GOT: {
+    mem: {}
+  }
+   };
+    
+    const wasmInstance = await WebAssembly.instantiate(wasmModule, importObject);
+    this.wasmModule = wasmInstance;
+
+    const BLOCK_SIZE = 128;
+    this.inputPtr = wasmInstance.exports.my_malloc(BLOCK_SIZE * 4);
+    this.input = new Float32Array(wasmInstance.exports.memory.buffer, this.inputPtr, BLOCK_SIZE);
+    this.outputPtr = wasmInstance.exports.my_malloc(BLOCK_SIZE * 4 * ${graph.numberOfOutputs});
+    this.output = new Float32Array(wasmInstance.exports.memory.buffer, this.outputPtr, BLOCK_SIZE * ${graph.numberOfOutputs});
+    this.port.postMessage({type: "wasm-ready"});
+    this.wasmModule.exports.initSineTable();
+  }
 
   constructor() {
     super();
+    this.ready = false;
     this.counter=0;
+    this.messageCounter = 0;
     this.disposed = false;
     this.id = "${name}";
     this.events = {};
+    this.messageKey = { type: '', subType: '' };
+    this.messageQueue = new Map(); // Map of type/subType -> array of messages
+    this.lastMessageTime = new Map(); // Map of type/subType -> last message time
+    this.messageInterval = 100; // Minimum interval between messages for a given type/subType (in milliseconds)
+
     ${prettyPrint("    ", genMemory(graph))}
+
+    ${messageArray}
 
     this.createSineTable();
     
     this.port.onmessage = (e) => {
        if (e.data.type === "memory-set") {
-
          let {idx, value} = e.data.body;
-
-         this.memory[idx] = value;
-//         console.log("mem set idx=%s value=%s", idx, value);
+         if (this.wasmModule) {
+           this.wasmModule.exports.setMemorySlot(idx, value);
+         } else {
+            this.memory[idx] = value;
+         }
+       } else if (e.data.type === "load-wasm") {
+          this.loadWASM(e.data.body);
        } else if (e.data.type === "schedule-set") {
          let {idx, value, time} = e.data.body;
          this.events[idx] = {value, time};
-         //console.log("scheduling idx=%s value=%s time=%s", idx, value, time, this.events);
        } else if (e.data.type === "init-memory") {
          let {idx, data} = e.data.body;
-         this.memory.set(data, idx)
+         if (this.wasmModule) {
+           for (let i=0; i < data.length; i++) {
+             this.wasmModule.exports.setMemorySlot(idx + i, data[i]);
+           }
+         } else {
+           for (let i=0; i < data.length; i++) {
+            this.memory.set(data, idx)
+         }
+}
        } else if (e.data.type === "memory-get") {
            let {idx, allocatedSize} = e.data.body;
            this.port.postMessage({
@@ -123,6 +192,8 @@ class ${name}Processor extends AudioWorkletProcessor {
        } else if (e.data.type === "dispose") {
            this.disposed = true;
            this.memory = null;
+       } else if (e.data.type === "ready") {
+           this.ready = true;
        }
     }
   }
@@ -143,33 +214,131 @@ class ${name}Processor extends AudioWorkletProcessor {
           event.time--;
           if (event.time <= 0) {
              this.memory[idx] = value;
-             
-             //console.log('executing sched idx=%s time=%s value=%s', idx, event.time, event.value);
              delete this.events[idx];
           }
      }
   }
 
-  ${prettyPrint("   ", genProcess(graph))}
+   queueMessage(type, subType, data) {
+    // Get the subType map for the given type
+    let subTypeMap = this.messageQueue.get(type);
+    if (!subTypeMap) {
+      subTypeMap = new Map();
+      this.messageQueue.set(type, subTypeMap);
+    }
+
+    // Add the message to the queue for the given type/subType
+    let messageQueue = subTypeMap.get(subType);
+    if (!messageQueue) {
+      messageQueue = [];
+      subTypeMap.set(subType, messageQueue);
+    }
+    messageQueue.push(data);
+  }
+
+  checkMessages() {
+    const now = performance.now();
+
+    // Iterate over the message queue and send messages if the rate limit has elapsed
+    for (const [type, subTypeMap] of this.messageQueue.entries()) {
+      for (const [subType, messages] of subTypeMap.entries()) {
+        // Check if enough time has elapsed since the last message of this type/subType
+        const key = type +  ":" + subType;
+        const lastMessageTime = this.lastMessageTime.get(key) || 0;
+        if (now - lastMessageTime >= this.messageInterval) {
+          // Send the next message in the queue
+          const data = messages.shift();
+          this.port.postMessage({type, subType, body: data});
+
+          // Update the last message time for this type/subType
+          this.lastMessageTime.set(key, now);
+        }
+
+        // Remove the subType entry from the map if the queue is empty
+        if (messages.length === 0) {
+          subTypeMap.delete(subType);
+          this.lastMessageTime.delete(key);
+        }
+      }
+
+      // Remove the type entry from the map if all subType queues are empty
+      if (subTypeMap.size === 0) {
+        this.messageQueue.delete(type);
+      }
+    }
+  }
+
+  ${prettyPrint("   ", code)}
 }
 
 registerProcessor("${name}", ${name}Processor)
 `
+    return {
+        code: out,
+        wasm
+    };
 };
 
-const genProcess = (graph: ZenGraph): string => {
+interface CodeOutput {
+    code: string;
+    wasm: string;
+}
+const genProcess = (graph: ZenGraph): CodeOutput => {
+    for (let history of graph.histories) {
+        graph.code = graph.code.replaceAll(history, "");
+    }
+
+    if (graph.context.target === Target.C) {
+        let wasmFile = generateWASM(graph);
+        let code = `
+process(inputs, outputs, parameters) {
+    if (this.disposed || !this.ready) {
+      return true;
+    }
+    const BLOCK_SIZE = 128;
+    let inputChannel = inputs[0];
+    let outputChannel = outputs[0];
+
+    for (let i = 0; i < 1; i ++) {
+      if (!this.wasmModule) {
+         return true;
+      } 
+      const inputChannel = inputs[i];
+      // Copy input samples to input buffer
+      this.input.set(inputChannel);
+
+      // Process samples
+      this.wasmModule.exports.process(this.inputPtr, this.outputPtr);
+
+      // Copy output buffer to output channel
+      for (let j=0; j < ${graph.numberOfOutputs}; j++) {
+     
+         let arr = this.output.slice(j*128, (j+1)*128);
+if (j === 1) {
+}
+         outputs[0][j].set(arr, 0);
+      }
+    }
+    return true;
+}
+`;
+        return { code, wasm: wasmFile };
+    }
+
     let out = `
 process(inputs, outputs) {
-    if (this.disposed) {
+    if (this.disposed || !this.ready) {
       return true;
     }
   let memory = this.memory;
+ 
 
   // note: we need to go thru each output channel for each sample
   // instead of how we are doing it here... or else the histories
   // will get all messed up.
   // actually, really the whole channels concept should be removed...
   for (let j=0; j < outputs[0][0].length; j++) {
+      this.messageCounter++;
       this.scheduleEvents();
       ${genInputs(graph)}
       ${declareOutputs(graph)}
@@ -181,55 +350,78 @@ process(inputs, outputs) {
 }
 `;
 
-    return out;
+    return { code: out, wasm: '' };
 };
 
-const genHistories = (graph: ZenGraph): string => {
+export const genHistories = (graph: ZenGraph): string => {
     let out = '';
     let already: string[] = [];
     for (let hist of graph.histories) {
+        hist = hist.replace("let", graph.context.varKeyword) + ';';
         if (!already.includes(hist)) {
-            out += prettyPrint("      ", hist);
+            out += prettyPrint("   ", hist);
         }
         already.push(hist);
     }
     return out;
 };
 
-const genInputs = (graph: ZenGraph): string => {
+export const genInputs = (graph: ZenGraph): string => {
     let out = '';
     for (let i = 0; i < graph.numberOfInputs; i++) {
-        out += `let in${i} = inputs[0][${i}]  ? inputs[0][${i}][j] : 0;
+        out += `${graph.context.varKeyword} in${i} = inputs[0][${i}]  ? inputs[0][${i}][j] : 0;
 `;
 
     }
     return out;
 };
 
-const declareOutputs = (graph: ZenGraph): string => {
+export const declareOutputs = (graph: ZenGraph): string => {
     let out = ``;
     for (let i = 0; i < graph.numberOfOutputs; i++) {
-        out += `let output${i} = 0;`
+        out += `${graph.context.varKeyword} output${i} = 0;`
     }
     return out;
 };
 
-const genOutputs = (graph: ZenGraph): string => {
+export const genOutputs = (graph: ZenGraph): string => {
     let out = ``;
     for (let i = 0; i < graph.numberOfOutputs; i++) {
-        out += `
-outputs[0][${i}][j] = output${i};
-`
+        if (graph.context.target === Target.C) {
+            out += `
+outputs[j + ${128 * i}] = output${i};
+`;
+        } else {
+            out += `
+            outputs[0][${i}][j] = output${i};
+            `
+        }
     }
     return out;
 };
 
-const genMemory = (graph: ZenGraph): string => {
+export const genMemory = (graph: ZenGraph): string => {
     return `
-        this.memory = new Float32Array(${graph.context.memory.size});
-        `;
+            this.memory = new Float64Array(${graph.context.memory.size});
+            `;
 };
 
 export const prettyPrint = (prefix: string, code: string): string => {
     return code.split("\n").map(x => prefix + x).join("\n");
+};
+
+
+export const initMemory = (context: Context, workletNode: AudioWorkletNode) => {
+    for (let block of context.memory.blocksInUse) {
+        if (block.initData !== undefined) {
+            let idx = block._idx === undefined ? block.idx : block._idx;
+            workletNode.port.postMessage({
+                type: "init-memory",
+                body: {
+                    idx: block._idx === undefined ? block.idx : block._idx,
+                    data: block.initData
+                }
+            })
+        }
+    }
 };

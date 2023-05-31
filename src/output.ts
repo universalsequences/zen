@@ -14,7 +14,6 @@ ${outputName} = ${_input.variable};
 `;
 
         let generated: Generated = context.emit(code, outputName, _input);
-        console.log("outputNumber=%s", outputNumber, generated.code);
         generated.outputs = outputNumber as number;
         return generated;
     }

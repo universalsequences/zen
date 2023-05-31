@@ -1,4 +1,5 @@
 import { MemoryBlock } from './block';
+import { uuid } from 'uuidv4';
 import { UGen, Generated, Arg, float } from './zen';
 import { Context, emitCode, ContextMessageType } from './context';
 
@@ -30,6 +31,7 @@ export type ContextualBlock = {
 };
 
 export const history = (val?: number, params?: HistoryParams, debugName?: string): History => {
+    let id: string = uuid();
     let block: MemoryBlock;
     let historyVar: string;
     let context: Context;
@@ -39,6 +41,7 @@ export const history = (val?: number, params?: HistoryParams, debugName?: string
 
     let _history: History = (input?: Arg): UGen => {
         return (_context: Context): Generated => {
+            let ogContext = _context;
             let contextToUse = _context;
             if (params && params.name) {
                 // need the base context if its a parameter (we dont want
@@ -50,30 +53,32 @@ export const history = (val?: number, params?: HistoryParams, debugName?: string
 
             _context = contextToUse;
             let _input = typeof input === "number" ? float(input)(contextToUse) : input ? input(contextToUse) : undefined;
+
             let contextChanged = context !== _context;
 
             context = _context;
             if (block === undefined || contextChanged) {
                 block = context.alloc(1);
                 historyVar = context.useVariables(debugName || "historyVal")[0];
+                contextBlocks = contextBlocks.filter(
+                    x => !x.context.disposed);
                 contextBlocks.push({ context, block });
-                console.log("available contexts=", contextBlocks);
             } else {
             }
 
-            let historyDef = `
-let ${historyVar} = memory[${block.idx}];
-`;
+            let historyDef = `${context.varKeyword} ${historyVar} = memory[${block.idx}]` + '\n';
 
             let code = '';
             let _variable: string = historyVar;
             if (_input) {
                 let [newVariable] = context.useVariables("histVal");
                 code = `
-memory[${block.idx}] = ${_input.variable}
+memory[${block.idx}] = ${_input.variable};
 `;
                 if (!params || !params.inline) {
-                    code += `;let ${newVariable} = ${historyVar};`
+                    code += `${context.varKeyword} ${newVariable} = ${historyVar};
+`
+
                 }
                 if (params && params.inline) {
                     newVariable = code;
@@ -85,6 +90,7 @@ memory[${block.idx}] = ${_input.variable}
             }
 
             let histories = _input ? emitHistory(_input) : [];
+            let outerHistories = _input ? emitOuterHistory(_input) : [];
 
             if (val !== undefined) {
                 block.initData = new Float32Array([val]);
@@ -96,10 +102,15 @@ memory[${block.idx}] = ${_input.variable}
             if (params && params.name) {
                 _params = [_history, ..._params];
             }
+
+            if (!historyDef.includes("*")) {
+                outerHistories = [historyDef, ...outerHistories];
+            }
             let out: Generated = {
                 code,
                 variable: _variable,
                 histories: [historyDef, ...histories],
+                outerHistories,
                 params: _params
             };
 
@@ -147,6 +158,11 @@ memory[${block.idx}] = ${_input.variable}
 /** used to collect all the histories for a functions arguments */
 export const emitHistory = (...gen: Generated[]): string[] => {
     return Array.from(new Set(gen.flatMap(x => x.histories)));
+};
+
+/** used to collect all the histories for a functions arguments */
+export const emitOuterHistory = (...gen: Generated[]): string[] => {
+    return Array.from(new Set(gen.flatMap(x => x.outerHistories || [])));
 };
 
 /** used to collect all the histories for a functions arguments */

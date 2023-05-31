@@ -3,6 +3,7 @@ import { UGen, Arg, Generated, float } from './zen'
 import { memo } from './memo';
 import { div, mult } from './math'
 import { Context } from './context';
+import { zen_let } from './let';
 
 const defaults: AccumParams = {
     min: 0,
@@ -16,11 +17,12 @@ export const phasor = (
 ): UGen => {
     return memo((context: Context): Generated => {
         let range = params.max - params.min;
-        return accum(
-            div(
-                mult(freq, range),
-                context.sampleRate),
-            reset,
-            params)(context);
+        return zen_let("phasor",
+            accum(
+                div(
+                    mult(freq, range),
+                    context.sampleRate),
+                reset,
+                params))(context);
     });
 };

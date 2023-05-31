@@ -1,0 +1,5 @@
+import { mult, add, sub, div } from '../math';
+import { Arg, UGen, Context } from '../index';
+
+export const zdf = (input, cutoff, resonance, gain) => {
+};

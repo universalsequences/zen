@@ -1,4 +1,5 @@
 import { UGen, Arg, genArg, Generated, float } from './zen';
+import { Target } from './targets';
 import { memo } from './memo';
 import { Context } from './context';
 
@@ -7,15 +8,21 @@ export const op = (operator: string, name: string, evaluator?: (x: number, y: nu
         return memo((context: Context): Generated => {
             let _ins = ins.map(f => context.gen(f));
             let [opVar] = context.useVariables(name + "Val");
-            let code = `let ${opVar} = ${_ins.map(x => x.variable).join(" " + operator + " ")};`
+            let code = `${context.varKeyword} ${opVar} = ${_ins.map(x => x.variable).join(" " + operator + " ")};`
+            if (operator === '%') {
+                if (context.target === Target.C) {
+                    code = `${context.varKeyword} ${opVar} = fmod(${_ins[0].variable}, ${_ins[1].variable});`;
+                }
+            }
             if (operator === '/') {
                 // we need to be save
-                code = `let ${opVar} = ${_ins[1].variable} === 0.0 ? 0.0 : ${_ins.map(x => x.variable).join(" " + operator + " ")};`
+                code = `${context.varKeyword} ${opVar} = ${_ins[1].variable} == 0.0 ? 0.0 : ${_ins.map(x => x.variable).join(" " + operator + " ")};`
             }
             if (ins.every(x => typeof x === "number") && evaluator !== undefined) {
                 let total = ins.map(x => x as number).reduce(evaluator,
+
                     first === undefined ? ins[0] as number : first);
-                code = `let ${opVar} = ${total}`;
+                code = `${context.varKeyword} ${opVar} = ${total}`;
                 return context.emit(code, opVar);
             }
             return context.emit(code, opVar, ..._ins);
@@ -27,13 +34,39 @@ const fixFloat = (x: Generated) => {
     return x;
 };
 
+type Keywords = {
+    [x: string]: string;
+}
+
+export const cKeywords: Keywords = {
+    'Math.abs': 'fabs',
+    'Math.random': "random_double",
+    'Math.floor': 'floor',
+    'Math.round': 'round',
+    'Math.ceil': 'ceil',
+    'Math.sin': 'sin',
+    'Math.tan': 'tan',
+    'Math.cos': 'cos',
+    'Math.tanh': 'tanh',
+    'Math.log2': '(1.0f / log(2)) * log',  // C does not have a direct log2 function
+    'Math.log10': 'log10',
+    'Math.pow': 'pow',
+    'Math.atan': 'atan',
+    'Math.exp': 'exp',
+    'Math.sqrt': 'sqrt',
+    // C does not have minf and maxf, but you can create your own functions for that
+    'Math.min': 'fmin',
+    'Math.max': 'fmax'
+};
 export const func = (func: string, name: string, jsFunc?: (...x: number[]) => number) => {
     return (...ins: Arg[]): UGen => {
         return (context: Context): Generated => {
             let _ins = ins.map(f => context.gen(f));
             let [opVar] = context.useVariables(`${name}Val`);
+            let _func = context.target === Target.C ? cKeywords[func] : func;
+
             let code = ins.length > 0 && ins.every(x => typeof x === "number") ?
-                `let ${opVar} = ${jsFunc!(...ins as number[])}` : `let ${opVar} = ${func}(${_ins.map(x => x.variable).join(",")});`;
+                `${context.varKeyword} ${opVar} = ${jsFunc!(...ins as number[])};` : `${context.varKeyword} ${opVar} = ${_func}(${_ins.map(x => x.variable).join(",")});`;
             return context.emit(code, opVar, ..._ins);
         }
     };
@@ -62,6 +95,8 @@ export const sin = func("Math.sin", "sin", Math.sin);
 export const tan = func("Math.tan", "tan", Math.tan);
 export const cos = func("Math.cos", "cos", Math.cos);
 export const tanh = func("Math.tanh", "tanh", Math.tanh);
+export const log2 = func("Math.log2", "log2", Math.log2);
+export const log10 = func("Math.log10", "log10", Math.log10);
 export const pow = func("Math.pow", "pow", Math.pow);
 export const atan = func("Math.atan", "atan", Math.atan);
 export const exp = func("Math.exp", "exp", Math.exp);
@@ -83,94 +118,102 @@ export const mix = (a: Arg, b: Arg, amount: Arg): UGen => {
 };
 
 export const wrap = (input: Arg, min: Arg, max: Arg): UGen => {
-    return (context: Context): Generated => {
+    return memo((context: Context): Generated => {
         let _input = context.gen(input);
         let _min = context.gen(min);
         let _max = context.gen(max);
-        let diff = `${_max.variable} - ${_min.variable}`;
+        let diff = `(${_max.variable} - ${_min.variable})`;
         let [wrapName] = context.useVariables("wrapVal");
 
+        //let mod1 = context.target === Target.C ? `fmod(${wrapName}, ${diff})` : `${wrapName} % ${diff}`;
+        let mod2 = context.target === Target.C ? `fmod(${wrapName} - ${_min.variable}, ${diff})` : `(${wrapName} - ${_min.variable}) % ${diff}`;
+        let _floor = context.target === Target.C ? cKeywords["Math.floor"] : "Math.floor";
+        let code = `
+${context.varKeyword} ${wrapName} = ${_input.variable};
+if( ${wrapName} < ${_min.variable}) ${wrapName} += ${diff} * (${_floor}((${_min.variable} - ${wrapName} / ${diff})) + 1);
+${wrapName}=  ${_min.variable} + ${mod2}; //((${wrapName} % ${diff}) + ${diff})%${diff};`
+        /*
         let code = `
 var ${wrapName} = ${_input.variable};
-if( ${wrapName} < ${_min.variable}) ${wrapName} = ${_min.variable} + ((${wrapName} % ${diff}) + ${diff})%${diff};
+if( ${wrapName} < ${_min.variable}) ${wrapName} = ${_min.variable} - ((${wrapName} % ${diff}) + ${diff})%${diff};
 else if(${wrapName} > ${_max.variable}) ${wrapName}=  ${_min.variable} + ((${wrapName} % ${diff}) + ${diff})%${diff};
 `
+*/
+
         return context.emit(code, wrapName, _input, _min, _max);
-    }
+    });
 };
 
 export const clamp = (input: Arg, min: Arg, max: Arg): UGen => {
-    return (context: Context): Generated => {
+    return memo((context: Context): Generated => {
         let _input = context.gen(input);
         let _min = context.gen(min);
         let _max = context.gen(max);
         let [clampName] = context.useVariables("clampVal");
 
         let code = `
-var ${clampName} = ${_input.variable};
+${context.varKeyword} ${clampName} = ${_input.variable};
 if( ${clampName} < ${_min.variable}) ${clampName} = ${_min.variable};
-else if(${clampName} > ${_max.variable}) ${clampName} = ${_max.variable};
-`
+else if(${clampName} > ${_max.variable}) ${clampName} = ${_max.variable};`
+
         return context.emit(code, clampName, _input, _min, _max);
-    }
+    });
 };
 
 export const reciprical = (input: Arg): UGen => {
-    return (context: Context): Generated => {
+    return memo((context: Context): Generated => {
         let _input = context.gen(input);
         let [recipricalName] = context.useVariables("recipricalValue");
 
-        let code = `
-var ${recipricalName} = ${_input.variable} === 0 ? 0 : 1.0/${_input.variable};
-`
+        let code = `${context.varKeyword} ${recipricalName} = ${_input.variable} == 0 ? 0 : 1.0/${_input.variable};`
+
         return context.emit(code, recipricalName, _input);
-    }
+    });
 };
 
 export const not_sub = (input: Arg): UGen => {
-    return (context: Context): Generated => {
+    return memo((context: Context): Generated => {
         let _input = context.gen(input);
         let [notSub] = context.useVariables("notSubValue");
 
-        let code = `
-var ${notSub} = 1.0 - ${_input.variable};
-`
+        let code = `${context.varKeyword} ${notSub} = 1.0 - ${_input.variable};`
         return context.emit(code, notSub, _input);
-    }
+    });
 };
 
 export type RoundMode = "ceil" | "trunc" | "floor" | "nearest";
 
 export const round = (numb: Arg, multi: Arg, mode: RoundMode): UGen => {
-    return (context: Context) => {
+    return memo((context: Context) => {
         let num = context.gen(numb);
         let multiple = context.gen(multi);
 
         let [roundVal, div] = context.useVariables('roundVal', 'div');
 
         let out = `
-let ${div} = ${num.variable} / ${multiple.variable};
+${context.varKeyword} ${div} = ${num.variable} / ${multiple.variable};
 `;
         let rounder = "";
         switch (mode) {
             case "ceil":
-                rounder = "Math.ceil";
+                rounder = context.target === Target.C ? cKeywords["Math.ceil"] : "Math.ceil";
                 break;
             case "trunc":
                 rounder = "Math.trunc";
                 break;
             case "floor":
-                rounder = "Math.floor";
+                rounder = context.target === Target.C ? cKeywords["Math.floor"] : "Math.floor";
+                break;
             case "nearest":
-                rounder = "Math.round";
+                rounder = context.target === Target.C ? cKeywords["Math.round"] : "Math.round";
         }
 
         out += `
-let ${roundVal} = ${multiple.variable} * ${rounder}(${div});
+${context.varKeyword} ${roundVal} = ${multiple.variable} * ${rounder}(${div});
 `;
 
         return context.emit(out, roundVal, num, multiple);
-    };
+    });
 };
 
 export const exp2 = (num: Arg) =>

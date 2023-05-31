@@ -1,5 +1,5 @@
 import { UGen, Arg, genArg, Generated, } from './zen';
-import { Context } from './context';
+import { LoopContext, Context } from './context';
 import { MemoryBlock } from './block';
 import { memo } from './memo'
 
@@ -12,10 +12,8 @@ export interface AccumParams {
 }
 export const accum = (incr: Arg, reset: Arg = 0, params: AccumParams) => {
     let block: MemoryBlock;
-    let _context: Context;
     return memo((context: Context) => {
         block = context.alloc(1);
-        _context = context;
         let _incr = genArg(incr, context);
         let _reset = genArg(reset, context);
         let [varName] = context.useVariables("accum");
@@ -29,12 +27,11 @@ export const accum = (incr: Arg, reset: Arg = 0, params: AccumParams) => {
         let inclusiveCase = `${params.max - params.min} + ${_incr.variable}`;
         let exclusive = params.exclusive === undefined || params.exclusive ? true : false;
         let comp = exclusive === true ? ">=" : ">";
-        let code = `
-let ${varName} = memory[${block.idx}];
+        let code = `${context.varKeyword} ${varName} = memory[${block.idx}];
 ${resetCheck}
 memory[${block.idx}] = ${varName} + ${_incr.variable};
-if (memory[${block.idx}] ${comp} ${params.max}) memory[${block.idx}] -= ${!exclusive ? inclusiveCase : params.max - params.min};
-`;
+if (memory[${block.idx}] ${comp} ${params.max}) memory[${block.idx}] -= ${!exclusive ? inclusiveCase : params.max - params.min};` + '\n';
+
         return context.emit(code, varName, _incr, _reset);
     });
 };

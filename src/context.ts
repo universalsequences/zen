@@ -1,9 +1,9 @@
 import { Memory } from './memory-helper'
 import { Block, MemoryBlock, LoopMemoryBlock } from './block'
 import { Arg, Generated, float } from './zen';
-import { emitParams, emitHistory } from './history'
+import { emitParams, emitHistory, emitOuterHistory } from './history'
 import { Range } from './loop';
-import { channel } from 'diagnostics_channel';
+import { Target } from './targets';
 
 export interface IContext {
     memory: Memory;
@@ -11,6 +11,7 @@ export interface IContext {
     histories: number;
     numberOfInputs: number;
     sampleRate: number;
+    disposed: boolean;
 }
 
 const HEAP_SIZE = 512 * 512 * 16;
@@ -34,9 +35,10 @@ export class Context {
     sampleRate: number;
     emittedVariables: EmittedVariables;
     worklets: AudioWorkletNode[];
+    target: Target;
+    disposed: boolean;
 
-    constructor() {
-        // TODO: should be able to grow the heap
+    constructor(target = Target.Javascript) {
         this.memory = new Memory(this, HEAP_SIZE),
             this.idx = 0;
         this.histories = 0;
@@ -44,6 +46,16 @@ export class Context {
         this.sampleRate = 44100;
         this.emittedVariables = {};
         this.worklets = [];
+        this.disposed = false;
+        this.target = target;
+    }
+
+    get varKeyword() {
+        return this.target === Target.C ? "float" : "let";
+    }
+
+    get intKeyword() {
+        return this.target === Target.C ? "int" : "let";
     }
 
     alloc(size: number): MemoryBlock {
@@ -70,7 +82,8 @@ export class Context {
     }
 
     isVariableEmitted(name: string): boolean {
-        return this.emittedVariables[name] === true;
+        let x = this.emittedVariables[name] === true;
+        return x;
     }
 
     useVariables(...names: string[]): string[] {
@@ -94,12 +107,24 @@ export class Context {
 
     emit(code: string, variable: string, ...args: Generated[]): Generated {
         let histories = emitHistory(...args);
+        let oldOuterHistories = emitOuterHistory(...args);
+        let outerHistories = Array.from(new Set([
+            ...oldOuterHistories,
+            ...histories.filter(x => !x.includes("*") && !x.includes("loopIdx"))
+        ]));
+
+
+        if ('context' in this) {
+            histories = histories.filter(x => x.includes("*"));
+        }
         let params = emitParams(...args);
         let out: Generated = {
             code: emitCode(this, code, variable, ...args),
             variable,
             histories,
-            params
+            outerHistories,
+            params,
+            context: this,
         };
         let inputs = args
             .filter(x => x.inputs !== undefined)
@@ -125,7 +150,6 @@ export class LoopContext extends Context {
 
     constructor(loopIdx: string, range: Range, context: Context | LoopContext) {
         super();
-        console.log("loop context called with context.idx=", context.idx);
         this.context = context;
         this.loopIdx = loopIdx;
         this.loopSize = (range.max as number) - (range.min as number);
@@ -136,28 +160,32 @@ export class LoopContext extends Context {
         this.sampleRate = context.sampleRate;
         this.emittedVariables = { ...context.emittedVariables };
         this.worklets = context.worklets;
+        this.target = context.target;
     }
 
     useVariables(...names: string[]): string[] {
-        let ret = super.useVariables(...names);
-        this.context.useVariables(...names);
+        //let ret = super.useVariables(...names);
+        let ret = this.context.useVariables(...names);
         return ret;
     }
 
     isVariableEmitted(name: string): boolean {
         // check any upstream blocks to see if we've already emmitted
-        return this.emittedVariables[name] === true
-            || super.isVariableEmitted(name);
+        let ret = this.emittedVariables[name] === true
+            || this.context.isVariableEmitted(name);
+        return ret;
     }
 
     alloc(size: number): MemoryBlock {
         let block: MemoryBlock = this.memory.alloc(size * this.loopSize);
+        let index = this.memory.blocksInUse.indexOf(block);
         let context = this.context;
         let _block = new LoopMemoryBlock(
             this,
             block.idx as number,
             block.size,
-            block.allocatedSize);
+            size); //block.allocatedSize);
+        this.memory.blocksInUse[index] = _block;
         return _block;
     }
 
@@ -186,3 +214,7 @@ const containsVariable = (gen: Generated): boolean => {
     return gen.code !== gen.variable;
 }
 
+
+export const emitOuterLoops = (...gen: Generated[]): string[] => {
+    return Array.from(new Set(gen.flatMap(x => x.outerLoops || [])));
+};

@@ -4,10 +4,12 @@ import { History } from './history';
 
 export const s = (...inputs: Arg[]): UGen => {
     return (context: Context): Generated => {
-        let code = "/** SEQ START **/";
+        let code = `
+/** SEQ START **/`;
         let lastVariable = "";
         let i = 0;
         let histories: string[] = [];
+        let outerHistories: string[] = [];
         let params: History[] = [];
         let outputs = 0;
         for (let input of inputs) {
@@ -27,6 +29,12 @@ export const s = (...inputs: Arg[]): UGen => {
                     ..._out.histories
                 ];
             }
+            if (_out.outerHistories) {
+                outerHistories = [
+                    ...outerHistories,
+                    ..._out.outerHistories
+                ];
+            }
             let b = new Date().getTime();
             if (_out.outputs! > outputs) {
                 outputs = _out.outputs!;
@@ -39,7 +47,8 @@ export const s = (...inputs: Arg[]): UGen => {
             params,
             code,
             variable: lastVariable,
-            histories
+            histories,
+            outerHistories
         };
     }
 }

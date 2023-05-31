@@ -1,4 +1,5 @@
 import { data, peek, poke } from './data';
+import { Target } from './targets';
 import { UGen, Generated, Arg, genArg } from './zen';
 import { Context } from './context';
 import { accum } from './accum';
@@ -21,14 +22,14 @@ export const delay = (input: Arg, delayTime: Arg): UGen => {
         let lerped = lerpPeek(context, buffer, delayIndexName);
         let out = `
 ${_accum.code}
-let ${indexName} = ${index};
+${context.target === Target.C ? "int" : "let"} ${indexName} = ${index};
 memory[${indexName}] = ${_input.variable};
-let ${delayIndexName} = ${indexName} - ${_delayTime.variable};
+${context.target === Target.C ? "int" : "let"} ${delayIndexName} = ${indexName} - ${_delayTime.variable};
 if (${delayIndexName} < ${buffer.idx}) {
   ${delayIndexName} += ${MAX_SIZE};
 }
 ${lerped.code}
-let ${delayName} = ${lerped.variable};
+${context.varKeyword} ${delayName} = ${lerped.variable};
 `;
 
         return context.emit(out, delayName, _input, _delayTime);

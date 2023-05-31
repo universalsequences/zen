@@ -1,12 +1,13 @@
 import { UGen, Generated } from './zen';
-import { Context } from './context';
+import { LoopContext, Context } from './context';
 
 export const memo = (fn: UGen): UGen => {
     let memoized: Generated;
     let _context: Context;
 
     return (context: Context): Generated => {
-        if (memoized !== undefined && context == _context) {
+        // the context === _context thing fucks up the physical modeling...
+        if (memoized !== undefined) {
             if (context.isVariableEmitted(memoized.variable!)) {
                 return {
                     ...memoized,

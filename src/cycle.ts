@@ -3,9 +3,10 @@ import { phasor } from './phasor';
 import { memo } from './memo';
 import { Context } from './context';
 import { add, wrap } from './math';
+import { Target } from './targets';
+import { cKeywords } from './math';
 
 const SINE_TABLE_SIZE = 1024;
-const SINE_TABLE = "this.sineTable";
 
 export const cycle = (
     freq: Arg,
@@ -26,18 +27,22 @@ export const cycle = (
             lerp,
             index,
             nextIndex] = context.useVariables(
-                "floatIndex", "frac", "lerp", "index", "nextIndex");
+                "floatIndex", "frac", "clerp", "index", "nextIndex");
 
+        const SINE_TABLE = context.target === Target.C ? "sineTable" : "this.sineTable";
+        let intKeyword = context.intKeyword;
+        let varKeyword = context.varKeyword;
+        let floor = context.target === Target.C ? cKeywords["Math.floor"] : "Math.floor";
         let out = `
 ${cyclePhase.code}
-let ${floatIndex} = ${cyclePhase.variable} * ${SINE_TABLE_SIZE};
-let ${frac} = ${floatIndex} - Math.floor(${floatIndex});
-let ${index} = Math.floor(${floatIndex});
-let ${nextIndex} = ${index} + 1;
+${context.varKeyword} ${floatIndex} = ${cyclePhase.variable} * ${SINE_TABLE_SIZE};
+${context.varKeyword} ${frac} = ${floatIndex} - ${floor}(${floatIndex});
+${intKeyword} ${index} = ${floor}(${floatIndex});
+${intKeyword} ${nextIndex} = ${index} + 1;
 if (${nextIndex} >= ${SINE_TABLE_SIZE}) {
   ${nextIndex} = 0;
 }
-let ${lerp} = (1.0-${frac})*${SINE_TABLE}[${index}] + ${frac}*${SINE_TABLE}[${nextIndex}];
+${varKeyword} ${lerp} = (1.0-${frac})*${SINE_TABLE}[${index}] + ${frac}*${SINE_TABLE}[${nextIndex}];
 `;
         return context.emit(out, lerp, _freq, _phase);
     });

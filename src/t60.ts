@@ -3,13 +3,16 @@ import { mult, mix } from './math';
 import { history, History } from './history'
 import { Context } from './context';
 import { memo } from './memo';
+import { cKeywords } from './math';
+import { Target } from './targets';
 
 export const t60 = (input: Arg): UGen => {
     return memo((context: Context): Generated => {
         let [variable] = context.useVariables("t60");
-        let _input = genArg(input, context);
+        let _input = context.gen(input);
+        let exp = context.target === Target.C ? cKeywords["Math.exp"] : "Math.exp";
         let code = `
-let ${variable} = Math.exp(-6.907755278921 / ${_input.variable});
+${context.varKeyword} ${variable} = ${exp}(-6.907755278921 / ${_input.variable});
 `;
         return context.emit(
             code,

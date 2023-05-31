@@ -101,7 +101,8 @@ export class LoopMemoryBlock extends MemoryBlock {
 
     // in order for this to work in a loop we have to carve out memory for each iteration of the loop
     get idx(): number | string {
-        return `${this._idx} + ${this.allocatedSize}*${this.context.loopIdx}*${this.context.loopSize}`;
+        // say 
+        return `${this._idx} + ${this.allocatedSize}*${this.context.loopIdx}`;//*${this.context.loopSize}`;
     }
 
     set idx(x: number | string) {

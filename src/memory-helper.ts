@@ -23,13 +23,10 @@ export class Memory {
     };
 
     alloc(size: number): MemoryBlock {
-        //console.log("alloc(%s)", size);
         let idx = 0;
         for (let i = 0; i < this.freeList.length; i++) {
             let block: MemoryBlock = this.freeList[i];
-            //console.log('checking against block with size=', block.size);
             if (size <= block.size) {
-                //console.log("allocing block with block.idx=", block.idx);
                 block = this.useBlock(block, size, i);
                 block.allocatedSize = size;
                 this.blocksInUse.push(block);
@@ -38,16 +35,13 @@ export class Memory {
         }
 
         this.increaseHeapSize();
-        //console.log("Heap size is now=", this.size, this);
         return this.alloc(size);
     }
 
     increaseHeapSize() {
-        console.log("INCREASE HEAP SIZE CALLED");
         this.size *= 2;
         let lastBlock = this.freeList[this.freeList.length - 1];
         lastBlock.size = this.size - lastBlock.allocatedSize;
-        //console.log('last block now=', lastBlock.size);
     }
 
     useBlock(block: MemoryBlock, size: number, freeIdx: number): MemoryBlock {

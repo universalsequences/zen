@@ -1,5 +1,7 @@
 import { Context } from './context';
+import { Target } from './targets';
 import { MemoryBlock } from './block';
+import { cKeywords } from './math';
 import { Generated } from './zen';
 
 export const lerpPeek = (
@@ -12,11 +14,14 @@ export const lerpPeek = (
     let fracName = `frac${varIdx}`;
     let lerpName = `lerpVal${varIdx}`;
     let nextIdxName = `nextIdx${varIdx}`;
+    let flooredName = `flooredName${varIdx}`;
+    let floor = context.target === Target.C ? cKeywords["Math.floor"] : "Math.floor";
     let out = `
-let ${fracName} = ${index} - Math.floor(${index})
-let ${nextIdxName} = Math.floor(${index} + 1);
+${context.varKeyword} ${fracName} = ${index} - ${floor}(${index});
+${context.target === Target.C ? "int" : "let"} ${nextIdxName} = ${floor}(${index} + 1);
 if (${nextIdxName} - ${block.idx} >= ${block.length}) ${nextIdxName} = ${block.idx} + 0;
-let ${lerpName} = (1.0-${fracName})*${memory}[Math.floor(${index})] + ${fracName}*${memory}[${nextIdxName}];
+${context.target === Target.C ? "int" : "let"} ${flooredName} = ${floor}(${index});
+${context.varKeyword} ${lerpName} = (1.0-${fracName})*${memory}[${flooredName}] + ${fracName}*${memory}[${nextIdxName}];
 `;
 
     return {
