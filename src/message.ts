@@ -13,7 +13,11 @@ export const message = (name: string, subType: Arg, value: Arg) => {
         // instead we need to have some sort of threshold
         // or store the messages somewhere
         let code = ``;
-        if (context.target !== Target.C) {
+        if (context.target === Target.C) {
+            code += `
+new_message(@beginMessage${name}@endMessage, ${_subType.variable}, ${_value.variable});
+`
+        } else {
             code += `
 if (this.messageCounter % 2000 === 0) {
 this.port.postMessage({type: @beginMessage${name}@endMessage, subType: ${_subType.variable}, body: ${_value.variable}});

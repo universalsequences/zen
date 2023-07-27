@@ -19,12 +19,12 @@ export interface Membrane {
 export interface Material {
     pitch: Arg,
     release: Arg,
-    placement: Arg,
     noise: Arg,
     x: Arg,
     y: Arg
 }
 
+/*
 export const membrane = (
     input: UGen,
     material: Material,
@@ -32,7 +32,6 @@ export const membrane = (
     const {
         pitch,
         release,
-        placement
     } = material;
     let tense = 0.999151;
     const SIZE = web.size;
@@ -91,69 +90,51 @@ export const membrane = (
     return {
         data: u, // send back the data for possible visualization
         membrane: s(
-            /**
-               First declare a bunch of variables so that we don't
-               recalculate on every iteration of the loop
-             */
-            currentIdx,
-            prevChannel,
-            u_center,
-            f1,
-            nt2,
+currentIdx,
+    prevChannel,
+    u_center,
+    f1,
+    nt2,
+    p_eff,
+    div(sumLoop(
+        { min: 0, max: N },
+        (idx) => {
+            let val = peek(u, idx, prevChannel);
+
+          
+let noiseParam = material.noise ? min(1.55, mult(1.55, material.noise)) : 0;
+let noiseFactor = scale(noise(), 0, 1, 0.1, noiseParam);
+let neighborsEnergy = mult(
+    noiseFactor,
+    0.5,
+    sumNeighbors(idx, u, neighbors, coeffs));
+
+let triggerCond = eq(idx, floor(placement));
+
+let energy = zswitch(
+    triggerCond,
+    f1,
+    0);
+
+let prev2 = peek(u, idx, sub(currentIdx, 2));
+
+let current = div(
+    add(
+        mult(2, val),
+        mult(
             p_eff,
-            div(sumLoop(
-                { min: 0, max: N },
-                (idx) => {
-                    let val = peek(u, idx, prevChannel);
+            add(neighborsEnergy, mult(1, energy), mult(-4, val))
+        ),
+        mult(-1, sub(1, nt2), prev2) // dampening term
+    ),
+    add(1, nt2) // dampening term
+);
 
-                    /**
-                     * Creating connections:
-                     * When connected to an inbound component, we need to:
-                     * 1. Calculate the neighbors sum in THIS component along with
-                     * 2. Calculate the neighbors sum in the other component (via this node)
-                     * 
-                     * Sum #1 and #2 
-                     * Then use the correct coefficients for dampening and pitch for this 
-                     * component.
-                     *
-                     * So if we create a for loop with all the params
-                     * and on each iteration w simply get the PARAMS object
-                     * containing all the information needed to run this loop* in 
-                     * this way
-                     */
-
-                    let noiseParam = material.noise ? min(1.55, mult(1.55, material.noise)) : 0;
-                    let noiseFactor = scale(noise(), 0, 1, 0.1, noiseParam);
-                    let neighborsEnergy = mult(
-                        noiseFactor,
-                        0.5,
-                        sumNeighbors(idx, u, neighbors, coeffs));
-
-                    let triggerCond = eq(idx, floor(placement));
-
-                    let energy = zswitch(
-                        triggerCond,
-                        f1,
-                        0);
-
-                    let prev2 = peek(u, idx, sub(currentIdx, 2));
-
-                    let current = div(
-                        add(
-                            mult(2, val),
-                            mult(
-                                p_eff,
-                                add(neighborsEnergy, mult(1, energy), mult(-4, val))
-                            ),
-                            mult(-1, sub(1, nt2), prev2) // dampening term
-                        ),
-                        add(1, nt2) // dampening term
-                    );
-
-                    return s(
-                        poke(u, idx, currentIdx, min(1, max(-1, current))),
-                        current);
-                }
-            ), mult(.013, N)))
+return s(
+    poke(u, idx, currentIdx, min(1, max(-1, current))),
+    current);
+        }
+    ), mult(.013, N)))
     };
 }
+*/

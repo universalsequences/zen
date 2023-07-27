@@ -1,5 +1,6 @@
 import { Context } from './context'
 import { UGen, Arg, genArg, Generated } from './zen';
+import { Argument, Function } from './functions';
 import { History } from './history';
 
 export const s = (...inputs: Arg[]): UGen => {
@@ -10,6 +11,8 @@ export const s = (...inputs: Arg[]): UGen => {
         let i = 0;
         let histories: string[] = [];
         let outerHistories: string[] = [];
+        let functions: Function[] = [];
+        let functionArguments: Argument[] = [];
         let params: History[] = [];
         let outputs = 0;
         for (let input of inputs) {
@@ -35,6 +38,18 @@ export const s = (...inputs: Arg[]): UGen => {
                     ..._out.outerHistories
                 ];
             }
+            if (_out.functions) {
+                functions = [
+                    ...functions,
+                    ..._out.functions
+                ];
+            }
+            if (_out.functionArguments) {
+                functionArguments = [
+                    ...functionArguments,
+                    ..._out.functionArguments
+                ];
+            }
             let b = new Date().getTime();
             if (_out.outputs! > outputs) {
                 outputs = _out.outputs!;
@@ -43,6 +58,8 @@ export const s = (...inputs: Arg[]): UGen => {
 
         code += "/** SEQ END **/";
         return {
+            functions,
+            functionArguments,
             outputs,
             params,
             code,

@@ -17,17 +17,23 @@ export const lerpPeek = (
     let flooredName = `flooredName${varIdx}`;
     let floor = context.target === Target.C ? cKeywords["Math.floor"] : "Math.floor";
     let out = `
+/** lerp begin **/
 ${context.varKeyword} ${fracName} = ${index} - ${floor}(${index});
-${context.target === Target.C ? "int" : "let"} ${nextIdxName} = ${floor}(${index} + 1);
-if (${nextIdxName} - ${block.idx} >= ${block.length}) ${nextIdxName} = ${block.idx} + 0;
 ${context.target === Target.C ? "int" : "let"} ${flooredName} = ${floor}(${index});
+${context.target === Target.C ? "int" : "let"} ${nextIdxName} = ${flooredName} + 1;
+if ((${nextIdxName}) - (${block.idx}) >= ${block.length} - 1) ${nextIdxName} = ${block.idx};
 ${context.varKeyword} ${lerpName} = (1.0-${fracName})*${memory}[${flooredName}] + ${fracName}*${memory}[${nextIdxName}];
+//${context.varKeyword} ${lerpName} = ${memory}[${flooredName}];
+/** lerp end **/
 `;
 
     return {
         params: [],
         code: out,
         variable: lerpName,
-        histories: []
+        histories: [],
+        functions: [],
+        variables: [lerpName],
+        functionArguments: []
     };
 };

@@ -25,6 +25,7 @@ export const accum = (incr: Arg, reset: Arg = 0, params: AccumParams) => {
             "" : `if (${_reset.variable} > 0) ${varName} = ${params.min};`
 
         let inclusiveCase = `${params.max - params.min} + ${_incr.variable}`;
+        // exclusive by default
         let exclusive = params.exclusive === undefined || params.exclusive ? true : false;
         let comp = exclusive === true ? ">=" : ">";
         let code = `${context.varKeyword} ${varName} = memory[${block.idx}];

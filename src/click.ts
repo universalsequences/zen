@@ -37,16 +37,13 @@ if (${clickVar} > 0) {
         return context.emit(code, clickVar);
     });
 
-    clicker.click = (time?: number) => {
-        if (!_context) {
-            return;
-        }
+    clicker.click = (time?: number, value?: number) => {
         for (let { context, block } of contextBlocks) {
             context.postMessage({
                 type: time !== undefined ? "schedule-set" : "memory-set",
                 body: {
                     idx: block.idx,
-                    value: 1,
+                    value: value === undefined ? 1 : value,
                     time
                 }
             });

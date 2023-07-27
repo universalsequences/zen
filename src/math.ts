@@ -14,6 +14,11 @@ export const op = (operator: string, name: string, evaluator?: (x: number, y: nu
                     code = `${context.varKeyword} ${opVar} = fmod(${_ins[0].variable}, ${_ins[1].variable});`;
                 }
             }
+            if (operator === '^') {
+                if (context.target === Target.C) {
+                    code = `${context.varKeyword} ${opVar} = ((int)${_ins[0].variable})^((int) ${_ins[1].variable});`;
+                }
+            }
             if (operator === '/') {
                 // we need to be save
                 code = `${context.varKeyword} ${opVar} = ${_ins[1].variable} == 0.0 ? 0.0 : ${_ins.map(x => x.variable).join(" " + operator + " ")};`
@@ -22,7 +27,7 @@ export const op = (operator: string, name: string, evaluator?: (x: number, y: nu
                 let total = ins.map(x => x as number).reduce(evaluator,
 
                     first === undefined ? ins[0] as number : first);
-                code = `${context.varKeyword} ${opVar} = ${total}`;
+                code = `${context.varKeyword} ${opVar} = ${total};`;
                 return context.emit(code, opVar);
             }
             return context.emit(code, opVar, ..._ins);
@@ -95,6 +100,7 @@ export const sin = func("Math.sin", "sin", Math.sin);
 export const tan = func("Math.tan", "tan", Math.tan);
 export const cos = func("Math.cos", "cos", Math.cos);
 export const tanh = func("Math.tanh", "tanh", Math.tanh);
+export const log = func("Math.log", "log", Math.log);
 export const log2 = func("Math.log2", "log2", Math.log2);
 export const log10 = func("Math.log10", "log10", Math.log10);
 export const pow = func("Math.pow", "pow", Math.pow);
@@ -123,22 +129,17 @@ export const wrap = (input: Arg, min: Arg, max: Arg): UGen => {
         let _min = context.gen(min);
         let _max = context.gen(max);
         let diff = `(${_max.variable} - ${_min.variable})`;
-        let [wrapName] = context.useVariables("wrapVal");
+        let [wrapName, range, normalized] = context.useVariables("wrapVal", "diffVal", "normalized");
 
         //let mod1 = context.target === Target.C ? `fmod(${wrapName}, ${diff})` : `${wrapName} % ${diff}`;
         let mod2 = context.target === Target.C ? `fmod(${wrapName} - ${_min.variable}, ${diff})` : `(${wrapName} - ${_min.variable}) % ${diff}`;
         let _floor = context.target === Target.C ? cKeywords["Math.floor"] : "Math.floor";
+        const _mod = (x: string, y: string) => context.target === Target.C ? `fmod(${x}, ${y})` : `((${x})%(${y}))`;
         let code = `
-${context.varKeyword} ${wrapName} = ${_input.variable};
-if( ${wrapName} < ${_min.variable}) ${wrapName} += ${diff} * (${_floor}((${_min.variable} - ${wrapName} / ${diff})) + 1);
-${wrapName}=  ${_min.variable} + ${mod2}; //((${wrapName} % ${diff}) + ${diff})%${diff};`
-        /*
-        let code = `
-var ${wrapName} = ${_input.variable};
-if( ${wrapName} < ${_min.variable}) ${wrapName} = ${_min.variable} - ((${wrapName} % ${diff}) + ${diff})%${diff};
-else if(${wrapName} > ${_max.variable}) ${wrapName}=  ${_min.variable} + ((${wrapName} % ${diff}) + ${diff})%${diff};
-`
-*/
+${context.varKeyword} ${range} = ${diff};
+${context.varKeyword} ${normalized} = ${_mod(_input.variable + ' - ' + _min.variable, range)};
+${context.varKeyword} ${wrapName} = ${normalized} >= 0 ? ${normalized} + ${_min.variable} : ${range} + ${normalized} + ${_min.variable};
+`;
 
         return context.emit(code, wrapName, _input, _min, _max);
     });
@@ -171,12 +172,13 @@ export const reciprical = (input: Arg): UGen => {
     });
 };
 
-export const not_sub = (input: Arg): UGen => {
+export const not_sub = (input: Arg, sec?: Arg): UGen => {
     return memo((context: Context): Generated => {
         let _input = context.gen(input);
+        let _sec = sec ? context.gen(sec) : float(1)(context);
         let [notSub] = context.useVariables("notSubValue");
 
-        let code = `${context.varKeyword} ${notSub} = 1.0 - ${_input.variable};`
+        let code = `${context.varKeyword} ${notSub} = ${_sec.variable} - ${_input.variable};`
         return context.emit(code, notSub, _input);
     });
 };

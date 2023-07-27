@@ -1,4 +1,5 @@
 import { Context } from './context';
+import { Argument, Function } from './functions';
 import { Target } from './targets';
 import { History } from './history';
 
@@ -12,8 +13,10 @@ import { History } from './history';
 
 export interface Generated {
     code: string; /*  the code generated */
+    outerCode?: string;
     variable?: string; /* the variable name referenced */
     histories: string[];
+    variables?: string[];
     outerHistories?: string[];
     outputs?: number;
     inputs?: number;
@@ -21,6 +24,8 @@ export interface Generated {
     context?: Context;
     isLoopDependent?: boolean;
     outerLoops?: string[];
+    functions: Function[];
+    functionArguments: Argument[];
 };
 
 export type UGen = (context: Context) => Generated;
@@ -43,6 +48,9 @@ export const float = (x: number): UGen => {
         return {
             code: floated,
             variable: floated,
+            variables: [],
+            functions: [],
+            functionArguments: [],
             histories: [],
             params: []
         };
@@ -54,7 +62,10 @@ export const input = (inputNumber: number = 0): UGen => {
         let name = context.input(inputNumber);
         return {
             code: name,
+            functions: [],
+            functionArguments: [],
             variable: name,
+            variables: [],
             histories: [],
             inputs: inputNumber,
             params: []
@@ -65,13 +76,15 @@ export const input = (inputNumber: number = 0): UGen => {
 
 // The way this works w/o outputs: each output will go in a different argument
 export const zen = (...inputs: UGen[]): ZenGraph => {
-    let context: Context = new Context(Target.C);
+    let context: Context = new Context(Target.Javascript);
     let code = "";
     let lastVariable = "";
     let numberOfOutputs = 1;
     let numberOfInputs = 1;
     let histories: string[] = [];
     let params: History[] = [];
+    let functions: Function[] = [];
+    let variables: string[] = [];
     let i = 0;
     for (let input of inputs) {
         let _out = input(context);
@@ -79,11 +92,21 @@ export const zen = (...inputs: UGen[]): ZenGraph => {
         lastVariable = _out.variable!;
         params = [...params, ..._out.params];
         i++;
+        if (_out.variables) {
+            variables = [...variables, ..._out.variables];
+        }
         if (_out.histories) {
             histories = [
                 ...histories,
                 ..._out.histories
             ];
+        }
+        if (_out.functions) {
+            functions = [
+                ...functions,
+                ..._out.functions
+            ];
+            functions = Array.from(new Set(functions));
         }
         if (_out.outputs !== undefined &&
             (_out.outputs! + 1) > numberOfOutputs) {
@@ -103,10 +126,13 @@ output0 = ${lastVariable};
         code,
         context,
         variable: lastVariable,
+        variables: variables,
         histories,
         numberOfInputs: numberOfInputs + 1,
         numberOfOutputs,
-        params
+        params,
+        functions,
+        functionArguments: []
     };
 }
 

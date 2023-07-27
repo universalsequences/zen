@@ -1,7 +1,9 @@
 import { MemoryBlock } from './block';
-import { uuid } from 'uuidv4';
+import { LoopContext } from './context';
 import { UGen, Generated, Arg, float } from './zen';
+import { memo } from './memo';
 import { Context, emitCode, ContextMessageType } from './context';
+import { emitFunctions, emitArguments } from './functions';
 
 export type Samples = number;
 interface HistoryParams {
@@ -20,7 +22,7 @@ interface HistoryParams {
 // an extremely weird type: a function that happens to
 // also have a field that allows for setting the value
 // of the heap referenced in the history in run time
-export type History = ((x?: UGen) => UGen) & {
+export type History = ((input?: UGen, reset?: UGen) => UGen) & {
     value?: (v: number, time?: number) => void,
     paramName?: string,
 }
@@ -31,7 +33,6 @@ export type ContextualBlock = {
 };
 
 export const history = (val?: number, params?: HistoryParams, debugName?: string): History => {
-    let id: string = uuid();
     let block: MemoryBlock;
     let historyVar: string;
     let context: Context;
@@ -39,7 +40,7 @@ export const history = (val?: number, params?: HistoryParams, debugName?: string
 
     let contextBlocks: ContextualBlock[] = [];
 
-    let _history: History = (input?: Arg): UGen => {
+    let _history: History = (input?: Arg, reset?: Arg): UGen => {
         return (_context: Context): Generated => {
             let ogContext = _context;
             let contextToUse = _context;
@@ -53,6 +54,8 @@ export const history = (val?: number, params?: HistoryParams, debugName?: string
 
             _context = contextToUse;
             let _input = typeof input === "number" ? float(input)(contextToUse) : input ? input(contextToUse) : undefined;
+            let _reset = reset === undefined ? contextToUse.gen(float(0)) : contextToUse.gen(reset);
+
 
             let contextChanged = context !== _context;
 
@@ -66,14 +69,25 @@ export const history = (val?: number, params?: HistoryParams, debugName?: string
             } else {
             }
 
-            let historyDef = `${context.varKeyword} ${historyVar} = memory[${block.idx}]` + '\n';
+            if (block._idx === 44794) {
+                console.log("BLOCK IDX context=", context, block);
+            }
+            let IDX = block.idx;
+            let historyDef = `${context.varKeyword} ${historyVar} = memory[${IDX}]` + '\n';
 
             let code = '';
             let _variable: string = historyVar;
             if (_input) {
+
+                /*
+                if (${_reset.variable} > 0) {
+                  memory[${IDX}] = 0;
+                }
+                */
                 let [newVariable] = context.useVariables("histVal");
                 code = `
-memory[${block.idx}] = ${_input.variable};
+// history insert
+memory[${IDX}] = ${_input.variable};
 `;
                 if (!params || !params.inline) {
                     code += `${context.varKeyword} ${newVariable} = ${historyVar};
@@ -85,12 +99,15 @@ memory[${block.idx}] = ${_input.variable};
                     code = '';
                 }
                 _variable = newVariable;
-                let newCode = emitCode(context, code, _variable, _input);
+                code = "/* begin history emit */ " + code + " /* end history emit */";
+                let newCode = emitCode(context, code, _variable, _input, _reset);
                 code = newCode;
             }
 
-            let histories = _input ? emitHistory(_input) : [];
-            let outerHistories = _input ? emitOuterHistory(_input) : [];
+            let histories = _input ? emitHistory(_input, _reset) : [];
+            let outerHistories = _input ? emitOuterHistory(_input, _reset) : [];
+            let functions = _input ? emitFunctions(_input, _reset) : [];
+            let args = _input ? emitArguments(_input, _reset) : [];
 
             if (val !== undefined) {
                 block.initData = new Float32Array([val]);
@@ -103,19 +120,31 @@ memory[${block.idx}] = ${_input.variable};
                 _params = [_history, ..._params];
             }
 
+
             if (!historyDef.includes("*")) {
                 outerHistories = [historyDef, ...outerHistories];
             }
+            /*
+            console.log("INPUT of history!=", _input);
+            if (_input && (context as LoopContext).context) {
+                code = _input.code + code;
+            }
+            */
             let out: Generated = {
                 code,
                 variable: _variable,
                 histories: [historyDef, ...histories],
                 outerHistories,
-                params: _params
+                params: _params,
+                functions,
+                variables: [_variable],
+                functionArguments: args
             };
 
+            //console.log("outputting history=", out);
+
             return out;
-        };
+        }
     };
 
 

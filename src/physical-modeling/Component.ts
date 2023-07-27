@@ -3,7 +3,7 @@ import { print } from '../print';
 import { Structure } from './web-maker'
 import { breakIf } from '../break';
 import { zswitch } from '../switch'
-import { floor, clamp, mult, mix, sqrt, exp, max, add, sub, div, pow, min, sign } from '../math'
+import { tanh, floor, clamp, mult, atan, mix, sqrt, exp, max, add, sub, div, pow, min, abs, sign } from '../math'
 import { neq, lte, gte, gt, eq, and } from '../compare'
 import { sumLoop } from '../loop'
 import { noise } from '../noise'
@@ -20,7 +20,7 @@ export interface Membrane {
 export interface Material {
     pitch: Arg;
     release: Arg;
-    placement: Arg;
+    //placement: Arg;
     x: Arg;
     y: Arg;
     noise: Arg;
@@ -59,6 +59,8 @@ export class Component {
         this.material = material;
 
         this.web = web;
+        console.log("COMPONENT ", isEntryPoint ? "A" : "B", this);
+        console.log("WEB.size = %s maxNeights=%s", web.size, web.maxNeighbors);
         this.neighbors = data(web.size * web.maxNeighbors, 1, web.neighbors, true, "none");
         this.coeffs = web.data; //data(web.size, web.size, web.coeffs, true, "none");
         this.dampening = web.dampeningData;
@@ -138,14 +140,7 @@ export class Component {
 
         let neighborsEnergy: UGen = this.calculateNeighborsEnergy(idx, val, input);
 
-        let triggerCond = eq(idx, floor(this.material.placement));
-
         let energy = mult(input, this.lerpExcitementEnergy(idx, this.material.x, this.material.y));
-        /*
-        let energy = mult(
-            triggerCond,
-            input);
-            */
 
         let prev2 = peek(this.u, idx, sub(this.currentChannel, 2));
 
@@ -168,7 +163,9 @@ export class Component {
         );
 
         return s(
-            poke(this.u, idx, this.currentChannel, min(1, max(-1, current))),
+            //poke(this.u, idx, this.currentChannel, tanh(current)), //min(1, max(-1, current))),
+            //poke(this.u, idx, this.currentChannel, min(1, max(-1, current))),
+            poke(this.u, idx, this.currentChannel, div(atan(mult(0.6366197723675814, current)), 0.6366197723675814)),
             current);
     }
 

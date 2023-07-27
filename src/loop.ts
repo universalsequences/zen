@@ -1,4 +1,6 @@
 import { Generated, Arg, UGen, genArg } from "./zen";
+import { memo } from './memo';
+import { replaceAll } from './replaceAll';
 import { prettyPrint } from './worklet'
 import { LoopContext, Context } from './context'
 
@@ -28,7 +30,7 @@ export interface Range {
 export type LoopBody = (i: UGen) => UGen;
 
 export const sumLoop = (range: Range, body: LoopBody): UGen => {
-    return (context: Context): Generated => {
+    return memo((context: Context): Generated => {
         let [i, sum] = context.useVariables("i", "sum");
         let loopContext = typeof range.min === "number" && typeof range.max === "number" ?
             new LoopContext(i, range, context) :
@@ -40,9 +42,9 @@ export const sumLoop = (range: Range, body: LoopBody): UGen => {
 
         let _body = body(_variable)(loopContext);
         let histories = Array.from(new Set(_body.histories));
-        histories = histories.map(x => x.replaceAll("let", context.varKeyword) + ';');
+        histories = histories.map(x => replaceAll(x, "let", context.varKeyword) + ';');
         let outerHistories = Array.from(new Set(_body.outerHistories));
-        outerHistories = outerHistories.map(x => x.replaceAll("let", context.varKeyword) + ';');
+        outerHistories = outerHistories.map(x => replaceAll(x, "let", context.varKeyword) + ';');
         let out = `
 ${prettyPrint("    ", outerHistories.join(""))}
 ${context.varKeyword} ${sum} = 0;
@@ -54,15 +56,17 @@ ${prettyPrint("    ", _body.code)}
 `;
 
         return context.emit(out, sum);
-    }
+    });
 }
 
 export const rawSumLoop = (range: Range, body: UGen, i: string): UGen => {
-    return (context: Context): Generated => {
+    return memo((context: Context): Generated => {
         let [sum] = context.useVariables("sum");
         let loopContext = typeof range.min === "number" && typeof range.max === "number" ?
             new LoopContext(i, range, context) :
             context;
+
+        console.log("creating loop context=", loopContext);
 
         let _min = context.gen(range.min);
         let _max = context.gen(range.max);
@@ -70,9 +74,10 @@ export const rawSumLoop = (range: Range, body: UGen, i: string): UGen => {
 
         let _body = body(loopContext);
         let histories = Array.from(new Set(_body.histories));
-        histories = histories.map(x => x.replaceAll("let", context.varKeyword) + ';');
-        let outerHistories = Array.from(new Set(_body.outerHistories));
-        outerHistories = outerHistories.map(x => x.replaceAll("let", context.varKeyword) + ';');
+        histories = histories.map(x => replaceAll(x, "let", context.varKeyword) + ';');
+        let outerHistories = Array.from(new Set(_body.outerHistories)).filter(x => !context.historiesEmitted.includes(x));
+        context.historiesEmitted = [...context.historiesEmitted, ...outerHistories];
+        outerHistories = outerHistories.map(x => replaceAll(x, "let", context.varKeyword) + ';');
         let out = `
 ${prettyPrint("    ", outerHistories.join(""))}
 ${context.varKeyword} ${sum} = 0;
@@ -85,7 +90,7 @@ ${prettyPrint("    ", _body.code)}
 
         let g: Generated = context.emit(out, sum);
         return g;
-    }
+    });
 }
 
 

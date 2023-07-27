@@ -1,63 +1,46 @@
 import { Arg, zswitch, eq, s } from './index';
-import { pow, lte, gte, log10, gt, exp, clamp, abs, tanh, sub, div, mult, add } from './math';
+import { message } from './message';
+import { pow, lt, lte, gte, log, min, log2, log10, sign, gt, exp, max, clamp, abs, tanh, sub, div, mult, add } from './math';
 import { history } from './history';
 import { samplerate } from './filters/zdf';
 
+const amp2db = (amp: Arg) => mult(20, log10(max(abs(amp), 0.00001)));
+const db2amp = (db: Arg) => pow(10, div(db, 20));
+
 export const compressor = (
-    audio_in: Arg,
+    in1: Arg,
     ratio: Arg,
     threshold: Arg,
     knee: Arg,
-    saturation: Arg,
-    makeup_gain: Arg,
-    attack_mode: Arg,
-    release: Arg
+    attack: Arg = .01,
+    release: Arg = 0.05
 ) => {
+    const in_db = amp2db(in1);
 
-    // SSL-style fixed attack times
-    let _mode = clamp(attack_mode, 0, 2);
-    const attack = zswitch(eq(_mode, 0), 0.1, zswitch(eq(_mode, 1), 0.3, 3));
+    const attack_coef = exp(div(log(0.01), mult(attack, 44100)));
+    const release_coef = exp(div(log(0.01), mult(release, 44100)));
 
-    // Convert attack and release times to coefficients
-    const attack_coeff = sub(1, exp(div(-1, mult(0.001, attack, samplerate()))));
-    const release_coeff = sub(1, exp(div(-1, mult(0.001, release, samplerate()))));
+    // Compute the difference between the input signal and the threshold
+    const delta = sub(in_db, threshold);
 
-    // Calculate the knee range
-    const knee_low = pow(10, div(sub(threshold, knee), 20));
-    const knee_high = pow(10, div(add(threshold, knee), 20));
+    const tmp = add(delta, mult(0.5, knee));
 
-    // Envelope follower
-    const env_prev = history();
-    const _env = abs(audio_in);
-    const env = zswitch(gt(_env, env_prev()),
-        add(env_prev(), mult(attack_coeff, sub(_env, env_prev()))),
-        add(env_prev(), mult(release_coeff, sub(_env, env_prev()))));
+    // soft knee
+    const gr = zswitch(
+        gt(delta, mult(-0.5, knee)),
+        zswitch(lt(delta, mult(0.5, knee)),
+            mult(div(sub(ratio, 1), mult(2, knee)), mult(tmp, tmp)),
+            mult(delta, sub(ratio, 1))),
+        0);
 
+    // Combine the 'knee' gain reduction with the standard gain reduction
+    //const gr = mult(min(knee_gr, sub(ratio, 1.0)), max(0.0, sub(in_db, threshold)));
 
-    // NEED TO SET history of env_prev(env) //env_prev = env;
-
-    // Calculate the gain reduction based on the input envelope, threshold, ratio, and knee width
-    const knee_env = mult(20, log10(env));
-
-    const gain_reduction = zswitch(
-        lte(env, knee_low),
-        0,
-        zswitch(
-            gte(env, knee_high),
-            sub(sub(mult(20, log10(env)), threshold), div(sub(mult(20, log10(env)), threshold), ratio)),
-            mult(sub(knee_env, sub(threshold, knee)), div(sub(knee_env, sub(threshold, knee)), mult(4, knee)))));
-
-
-    const makeup = zswitch(eq(makeup_gain, 0), div(gain_reduction, ratio), makeup_gain);
-
-    // Apply gain reduction and makeup gain to the input signal
-    let reduction = add(mult(-1, gain_reduction), makeup);
-    const compressed_signal = mult(audio_in, pow(10, div(reduction, 20)));
-
-    // Apply soft saturation to the compressed signal
-    //compressed_signal = tanh(saturation * compressed_signal) / tanh(saturation);
+    const prev_gr = history();
+    // Apply the attack/release envelope to the gain reduction
     return s(
-        env_prev(env),
-        tanh(div(mult(saturation, compressed_signal), tanh(saturation))));
-
+        prev_gr(
+            zswitch(gt(gr, prev_gr()), add(mult(attack_coef, prev_gr()), mult(gr, sub(1, attack_coef))),
+                add(mult(release_coef, prev_gr()), mult(gr, sub(1, release_coef))))),
+        mult(sign(in1), db2amp(sub(in_db, prev_gr()))));
 };

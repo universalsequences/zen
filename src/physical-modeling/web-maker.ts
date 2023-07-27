@@ -2,8 +2,8 @@ import { data, BlockGen } from '../data';
 
 export interface SpiderWeb {
     neighbors: Float32Array;
-    coeffs: Float32Array;
-    dampening: Float32Array;
+    coeffs?: Float32Array;
+    dampening?: Float32Array;
     maxNeighbors: number;
     size: number;
     neighborsMatrix: Level[];
@@ -12,6 +12,7 @@ export interface SpiderWeb {
     data: BlockGen;
     dampeningData: BlockGen;
     pointsData?: BlockGen;
+    points?: Float32Array;
 }
 
 export type Structure = SpiderWeb;

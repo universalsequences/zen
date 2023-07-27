@@ -1,7 +1,9 @@
 import { Memory } from './memory-helper'
 import { Block, MemoryBlock, LoopMemoryBlock } from './block'
 import { Arg, Generated, float } from './zen';
+import { Function } from './functions';
 import { emitParams, emitHistory, emitOuterHistory } from './history'
+import { emitArguments, emitFunctions } from './functions'
 import { Range } from './loop';
 import { Target } from './targets';
 
@@ -31,17 +33,21 @@ export class Context {
     memory: Memory;
     idx: number;
     histories: number;
+    functions: Function[];
     numberOfInputs: number;
     sampleRate: number;
     emittedVariables: EmittedVariables;
     worklets: AudioWorkletNode[];
     target: Target;
     disposed: boolean;
+    historiesEmitted: string[];
 
     constructor(target = Target.Javascript) {
         this.memory = new Memory(this, HEAP_SIZE),
             this.idx = 0;
         this.histories = 0;
+        this.functions = [];
+        this.historiesEmitted = [];
         this.numberOfInputs = 1;
         this.sampleRate = 44100;
         this.emittedVariables = {};
@@ -51,7 +57,7 @@ export class Context {
     }
 
     get varKeyword() {
-        return this.target === Target.C ? "float" : "let";
+        return this.target === Target.C ? "double" : "let";
     }
 
     get intKeyword() {
@@ -107,24 +113,38 @@ export class Context {
 
     emit(code: string, variable: string, ...args: Generated[]): Generated {
         let histories = emitHistory(...args);
+        let functions = emitFunctions(...args);
+        let functionArguments = emitArguments(...args);
         let oldOuterHistories = emitOuterHistory(...args);
         let outerHistories = Array.from(new Set([
             ...oldOuterHistories,
             ...histories.filter(x => !x.includes("*") && !x.includes("loopIdx"))
         ]));
 
+        let loopDep = args.some(x => x.isLoopDependent);
 
         if ('context' in this) {
             histories = histories.filter(x => x.includes("*"));
         }
         let params = emitParams(...args);
+
+        let _variables = [variable];
+        for (let { variables } of args) {
+            if (variables) {
+                _variables = [..._variables, ...variables];
+            }
+        }
         let out: Generated = {
             code: emitCode(this, code, variable, ...args),
             variable,
             histories,
             outerHistories,
             params,
+            variables: _variables,
             context: this,
+            functions,
+            functionArguments,
+            isLoopDependent: loopDep
         };
         let inputs = args
             .filter(x => x.inputs !== undefined)
@@ -195,15 +215,32 @@ export class LoopContext extends Context {
 
 export const emitCode = (context: Context, code: string, variable: string, ...gens: Generated[]): string => {
     let vout = "";
-    if (code.trim().startsWith("let") && context.isVariableEmitted(variable)) {
+    if ((code.trim().startsWith("let") || (code.trim().startsWith("double"))) && context.isVariableEmitted(variable)) {
         return variable;
+    }
+    if (variable === "peekVal271") {
+        console.log('setting emitted variables[%s] = true', variable, context);
     }
     context.emittedVariables[variable] = true;
     for (let gen of gens) {
         if (containsVariable(gen)) {
             vout += gen.code;
+
+            if (gen.variable! === "peekVal271") {
+                console.log('loop setting emitted variables[%s] = true', gen.variable!, context);
+            }
             context.emittedVariables[gen.variable!] = true;
+        } else {
         }
+    }
+    /*
+    console.log("****************BEGIN*************");
+    console.log("vout=", vout);
+    console.log("code=", code);
+    console.log("****************END*************");
+    */
+    if (variable === "peekVal271") {
+        console.log('return vout=', vout + '\n' + code);
     }
     return vout + '\n' + code;
 }
