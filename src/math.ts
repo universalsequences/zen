@@ -179,7 +179,7 @@ export const not_sub = (input: Arg, sec?: Arg): UGen => {
         let [notSub] = context.useVariables("notSubValue");
 
         let code = `${context.varKeyword} ${notSub} = ${_sec.variable} - ${_input.variable};`
-        return context.emit(code, notSub, _input);
+        return context.emit(code, notSub, _input, _sec);
     });
 };
 
@@ -201,7 +201,8 @@ ${context.varKeyword} ${div} = ${num.variable} / ${multiple.variable};
                 rounder = context.target === Target.C ? cKeywords["Math.ceil"] : "Math.ceil";
                 break;
             case "trunc":
-                rounder = "Math.trunc";
+                //rounder = "Math.trunc";
+                rounder = context.target === Target.C ? cKeywords["Math.floor"] : "Math.floor";
                 break;
             case "floor":
                 rounder = context.target === Target.C ? cKeywords["Math.floor"] : "Math.floor";

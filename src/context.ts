@@ -115,6 +115,9 @@ export class Context {
         let histories = emitHistory(...args);
         let functions = emitFunctions(...args);
         let functionArguments = emitArguments(...args);
+        if (functionArguments.length > 0) {
+            console.log('context.emit args gave back', functionArguments, args);
+        }
         let oldOuterHistories = emitOuterHistory(...args);
         let outerHistories = Array.from(new Set([
             ...oldOuterHistories,
@@ -140,7 +143,7 @@ export class Context {
             histories,
             outerHistories,
             params,
-            variables: _variables,
+            variables: Array.from(new Set(_variables)),
             context: this,
             functions,
             functionArguments,

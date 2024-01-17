@@ -5,8 +5,8 @@ import { History } from './history';
 
 export const s = (...inputs: Arg[]): UGen => {
     return (context: Context): Generated => {
-        let code = `
-/** SEQ START **/`;
+        let code = ""
+
         let lastVariable = "";
         let i = 0;
         let histories: string[] = [];
@@ -54,9 +54,9 @@ export const s = (...inputs: Arg[]): UGen => {
             if (_out.outputs! > outputs) {
                 outputs = _out.outputs!;
             }
+            //console.log(`seq took ${b - a}ms`, input);
         }
 
-        code += "/** SEQ END **/";
         return {
             functions,
             functionArguments,

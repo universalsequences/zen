@@ -21,14 +21,12 @@ export const createWorklet = (
 
     return new Promise(async (resolve: (x: LazyZenWorklet) => void) => {
         let { code, wasm } = createWorkletCode(name, graph);
-        console.log(code);
         let workletCode = code;
-
+        console.log(workletCode);
         const workletBase64 = btoa(workletCode);
         const url = `data:application/javascript;base64,${workletBase64}`;
 
         const onCompilation = (): AudioWorkletNode => {
-            console.log("NUMBER OF INPUTS=", graph.numberOfInputs);
             const workletNode = new AudioWorkletNode(
                 ctxt,
                 name,
@@ -40,6 +38,7 @@ export const createWorklet = (
                     outputChannelCount: [graph.numberOfOutputs]
                 })
 
+            console.log("on compilation complete=", workletNode);
 
             workletNode.port.onmessage = (e: MessageEvent) => {
                 let type = e.data.type
@@ -59,7 +58,7 @@ export const createWorklet = (
 
             // Send initial data (Param & Data operators) to the worklet
             if (graph.context.target === Target.C) {
-                fetch("/compile", {
+                fetch("http://localhost:7171/compile", {
                     method: "POST",
                     headers: { 'Content-Type': 'text/plain' },
                     body: wasm
@@ -87,7 +86,9 @@ export const createWorklet = (
             return workletNode;
         };;
 
+        console.log('adding audio worklet to module', ctxt);
         await ctxt.audioWorklet.addModule(url);
+        console.log('successfully added worklet to module');
         if (onlyCompile) {
             resolve(onCompilation);
             return;
@@ -172,7 +173,7 @@ this.port.postMessage({type: "error-compiling", data: "yo"});
     this.id = "${name}";
     this.events = [];
     this.messageKey = { type: '', subType: '' };
-    this.messageQueue = new Map(); // Map of type/subType -> array of messages
+    this.messageQueue = {}; // Map of type/subType -> array of messages
     this.lastMessageTime = new Map(); // Map of type/subType -> last message time
     this.messageInterval = 100; // Minimum interval between messages for a given type/subType (in milliseconds)
 
@@ -210,9 +211,11 @@ this.port.postMessage({type: "ack",body: "yo"});
              }
            }
          } else {
-           for (let i=0; i < data.length; i++) {
+//           for (let i=0; i < data.length; i++) {
+if (this.memory) {
             this.memory.set(data, idx)
-         }
+}
+//         }
 }
        } else if (e.data.type === "memory-get") {
            if (this.wasmModule) {
@@ -319,42 +322,14 @@ keys.push(type);
     }
 
     // Add the message to the queue for the given type/subType
-    let messageQueue = subTypeMap.get(subType);
-    if (!messageQueue) {
-      messageQueue = [];
-      subTypeMap.set(subType, messageQueue);
-    }
-    messageQueue.push(data);
+    subTypeMap.set(subType, data);
   }
 
   checkMessages() {
-    const now = performance.now();
-
     // Iterate over the message queue and send messages if the rate limit has elapsed
     for (const [type, subTypeMap] of this.messageQueue.entries()) {
-      for (const [subType, messages] of subTypeMap.entries()) {
-        // Check if enough time has elapsed since the last message of this type/subType
-        const key = type +  ":" + subType;
-        const lastMessageTime = this.lastMessageTime.get(key) || 0;
-        if (now - lastMessageTime >= this.messageInterval) {
-          // Send the next message in the queue
-          const data = messages.shift();
-          this.port.postMessage({type, subType, body: data});
-
-          // Update the last message time for this type/subType
-          this.lastMessageTime.set(key, now);
-        }
-
-        // Remove the subType entry from the map if the queue is empty
-        if (messages.length === 0) {
-          subTypeMap.delete(subType);
-          this.lastMessageTime.delete(key);
-        }
-      }
-
-      // Remove the type entry from the map if all subType queues are empty
-      if (subTypeMap.size === 0) {
-        this.messageQueue.delete(type);
+      for (const [subType, message] of subTypeMap.entries()) {
+          this.port.postMessage({type, subType, body: message});
       }
     }
   }
@@ -446,6 +421,10 @@ process(inputs, outputs) {
   for (let j=0; j < outputs[0][0].length; j++) {
       let elapsed = this.elapsed++;
       this.messageCounter++;
+
+    if (this.messageCounter % 2000 === 0) {
+      //this.checkMessages();
+    }
       this.scheduleEvents();
       ${genInputs(graph)}
       ${declareOutputs(graph)}

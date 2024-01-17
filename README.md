@@ -11,9 +11,9 @@ The ultimate goal is for this package to be placed onchain, and then used by oth
 
 # What is Gen~?
 
-Gen~ is Max MSPs sound generation language, that approachs sound synthesis/effects sample by sample.
+Gen~ is Max MSP's sound generation language, that approachs sound synthesis/effects sample by sample.
 
-Computers normally process audio in chunks of "samples" (i.e. numbers from -1 to 1). This is efficient for the computer, but hard 
+Computers normally process audio in chunks of 100s of "samples" (i.e. numbers from -1 to 1). This is efficient for the computer, but hard 
 to reason about. For example, if you were to think of an effect that depends on a sample 500 samples in the past, you'd normally
 have to figure out which chunk that sample was in, etc.
 
@@ -21,13 +21,17 @@ When you abstract away chunks, and think of audio as simply streams of numbers, 
 
 That is the power of Gen~, abstracting away all that chunk nonsense to give you the stream of sound.
 
+# Zen
+
+Zen makes several improvements on Gen~ that make it easier to do higher-order programming. 
+
 # Why do we need this onchain?
 
-Onchain generative music is limited by web-audio. Simple concepts like oscillator hardsync & feedback FM are not implemented, even though they've been around since the 80s. 
+Onchain generative music is limited by web-audio. Simple concepts like oscillator hardsync & feedback FM are not possible, even though they've been around since the 80s. 
 
 In **Zen** you can get a hardsynced synth like this
 `
-phasor(440, phasor(22)) 
+phasor(440, rampToTrig(phasor(22)))
 `
 
 A simple onepole lowpass filter: `history(mix(input(0), history(undefined, "filter"), 0.999), "filter")`

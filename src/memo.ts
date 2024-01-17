@@ -1,6 +1,10 @@
 import { UGen, Generated } from './zen';
 import { LoopContext, Context } from './context';
 
+/**
+ * this ensures that functions that get called multiple times try to
+ * only do the function's "work" once, and it's value gets re-used
+ */
 export const memo = (fn: UGen): UGen => {
     let memoized: Generated;
     let _context: Context;
@@ -19,7 +23,7 @@ export const memo = (fn: UGen): UGen => {
 
                 }
                 return memoized;
-            } else if ((_context as LoopContext).context && //) {
+            } else if ((_context as LoopContext).context &&
                 context.isVariableEmitted(memoized.variable!)) {
                 let x = {
                     ...memoized,
@@ -80,7 +84,12 @@ export const memo = (fn: UGen): UGen => {
             }
         }
         _context = context;
+        let a = new Date().getTime();
         memoized = fn(context);
+        let b = new Date().getTime();
+        if (b - a > 50) {
+            console.log('memo internal fn took', b - a, memoized);
+        }
         return memoized;
     };
 };
