@@ -56,7 +56,6 @@ export const history = (val?: number, params?: HistoryParams, debugName?: string
             let _input = typeof input === "number" ? float(input)(contextToUse) : input ? input(contextToUse) : undefined;
             let _reset = reset === undefined ? contextToUse.gen(float(0)) : contextToUse.gen(reset);
 
-
             let contextChanged = context !== _context;
 
             context = _context;
@@ -124,9 +123,6 @@ memory[${IDX}] = ${_input.variable};
                 variables: [_variable],
                 functionArguments: args
             };
-
-            //console.log("outputting history=", out);
-
             return out;
         }
     };

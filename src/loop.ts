@@ -66,8 +66,6 @@ export const rawSumLoop = (range: Range, body: UGen, i: string): UGen => {
             new LoopContext(i, range, context) :
             context;
 
-        console.log("creating loop context=", loopContext);
-
         let _min = context.gen(range.min);
         let _max = context.gen(range.max);
         //let _variable = variable(i);

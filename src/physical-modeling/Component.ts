@@ -54,8 +54,6 @@ export class Component {
         this.isEntryPoint = isEntryPoint;
 
         this.material = material;
-        console.log('component initialized with material = ', this.material);
-
         this.web = web;
         this.neighbors = data(web.size * web.maxNeighbors, 1, web.neighbors, true, "none");
         this.coeffs = web.data;
@@ -180,8 +178,8 @@ export class Component {
         let maxDistance = 80;
         let energy = clamp(sub(1, div(distance, maxDistance)), 0, 1);
         const neg = (x: Arg) => mult(-1, x);
-        let gaussianEnergy = exp(div(neg(pow(distance, 2)),
-            mult(2, pow(div(maxDistance, 2), 2))));
+        //let gaussianEnergy = exp(div(neg(pow(distance, 2)),
+        //    mult(2, pow(div(maxDistance, 2), 2))));
         return energy;
 
     }

@@ -22,7 +22,6 @@ export const createWorklet = (
     return new Promise(async (resolve: (x: LazyZenWorklet) => void) => {
         let { code, wasm } = createWorkletCode(name, graph);
         let workletCode = code;
-        console.log(workletCode);
         const workletBase64 = btoa(workletCode);
         const url = `data:application/javascript;base64,${workletBase64}`;
 
@@ -421,10 +420,6 @@ process(inputs, outputs) {
   for (let j=0; j < outputs[0][0].length; j++) {
       let elapsed = this.elapsed++;
       this.messageCounter++;
-
-    if (this.messageCounter % 2000 === 0) {
-      //this.checkMessages();
-    }
       this.scheduleEvents();
       ${genInputs(graph)}
       ${declareOutputs(graph)}

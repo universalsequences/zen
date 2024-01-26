@@ -115,9 +115,6 @@ export class Context {
         let histories = emitHistory(...args);
         let functions = emitFunctions(...args);
         let functionArguments = emitArguments(...args);
-        if (functionArguments.length > 0) {
-            console.log('context.emit args gave back', functionArguments, args);
-        }
         let oldOuterHistories = emitOuterHistory(...args);
         let outerHistories = Array.from(new Set([
             ...oldOuterHistories,
@@ -221,29 +218,13 @@ export const emitCode = (context: Context, code: string, variable: string, ...ge
     if ((code.trim().startsWith("let") || (code.trim().startsWith("double"))) && context.isVariableEmitted(variable)) {
         return variable;
     }
-    if (variable === "peekVal271") {
-        console.log('setting emitted variables[%s] = true', variable, context);
-    }
     context.emittedVariables[variable] = true;
     for (let gen of gens) {
         if (containsVariable(gen)) {
             vout += gen.code;
-
-            if (gen.variable! === "peekVal271") {
-                console.log('loop setting emitted variables[%s] = true', gen.variable!, context);
-            }
             context.emittedVariables[gen.variable!] = true;
         } else {
         }
-    }
-    /*
-    console.log("****************BEGIN*************");
-    console.log("vout=", vout);
-    console.log("code=", code);
-    console.log("****************END*************");
-    */
-    if (variable === "peekVal271") {
-        console.log('return vout=', vout + '\n' + code);
     }
     return vout + '\n' + code;
 }

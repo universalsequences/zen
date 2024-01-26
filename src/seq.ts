@@ -8,7 +8,6 @@ export const s = (...inputs: Arg[]): UGen => {
         let code = ""
 
         let lastVariable = "";
-        let i = 0;
         let histories: string[] = [];
         let outerHistories: string[] = [];
         let functions: Function[] = [];
@@ -16,7 +15,6 @@ export const s = (...inputs: Arg[]): UGen => {
         let params: History[] = [];
         let outputs = 0;
         for (let input of inputs) {
-            let a = new Date().getTime();
             if (typeof input !== "function") {
                 continue;
             }
@@ -25,7 +23,6 @@ export const s = (...inputs: Arg[]): UGen => {
             code += ' ' + _out.code + ';';
             lastVariable = _out.variable!;
             context.emittedVariables[lastVariable] = true;
-            i++;
             if (_out.histories) {
                 histories = [
                     ...histories,
@@ -50,11 +47,9 @@ export const s = (...inputs: Arg[]): UGen => {
                     ..._out.functionArguments
                 ];
             }
-            let b = new Date().getTime();
             if (_out.outputs! > outputs) {
                 outputs = _out.outputs!;
             }
-            //console.log(`seq took ${b - a}ms`, input);
         }
 
         return {
